@@ -1,0 +1,174 @@
+import os
+import paramiko
+import PySimpleGUI as sg
+
+
+class Json:
+    pass
+
+
+class IntegracjaGraficzna:
+    def __init__(self, color):
+        self.color = color
+
+    def graphicPopUp(self):
+        if self.color is not None:
+            sg.popup(f'Wybrany kolor: {self.color}')
+
+
+
+class RaspberryPi:
+    def __init__(self, ipAddress, username, password):
+        self.ssh_client = None
+        self.ipAddress = ipAddress
+        self.username = username
+        self.password = password
+
+
+    def connect(self):
+        try:
+            client = paramiko.SSHClient()
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            client.connect(self.ipAddress, username=self.username, password=self.password)
+            self.ssh_client = client
+            return True
+        except paramiko.AuthenticationException:
+            sg.popup_error("Błąd uwierzytelniania. Sprawdź nazwę użytkownika i hasło.")
+            return False
+        except paramiko.SSHException as ssh_ex:
+            sg.popup_error(f"Błąd połączenia SSH: {ssh_ex}")
+            return False
+        except Exception as ex:
+            sg.popup_error(f"Błąd połączenia: {ex}")
+            self.ssh_client = None
+            return False
+
+    def disconnect(self):
+        if self.ssh_client:
+            self.ssh_client.close()
+            self.ssh_client = None
+
+class Camera(RaspberryPi):
+    def take_photo(self, photoPath, x):
+        if self.ssh_client is None:
+            sg.Popup('Błąd', 'Brak aktywnego połączenia z Raspberry Pi.')
+            return None
+
+        try:
+            photoPath = os.path.join(photoPath, f'zdjecie{x}.jpg')
+            print(photoPath)
+            command = f'raspistill -o {photoPath}'
+            self.ssh_client.exec_command(command)
+            return photoPath
+        except paramiko.SSHException as e:
+            sg.Popup('Błąd SSH', f'Wystąpił błąd SSH: {str(e)}')
+
+class FileTransferOut(RaspberryPi):
+    def download_folder(self, remotePath, localPath):
+        try:
+            sftp = self.ssh_client.open_sftp()
+            os.makedirs(localPath, exist_ok=True)
+            files = sftp.listdir_attr(remotePath)
+            for file in files:
+                remoteFile = os.path.join(remotePath, file.filename)
+                localFile = os.path.join(localPath, file.filename)
+                if file.st_mode & 0o040000:  # Sprawdz czy to katalog
+                    self.download_folder(remoteFile, localFile)
+                else:
+                    sftp.get(remoteFile, localFile)
+            sftp.close()
+        except Exception as ex:
+            print(f"Błąd połączenia: {ex}")
+
+
+class FileTransferIn(RaspberryPi):
+    def transferFile(self, localPath, remotePath):
+        try:
+            if self.ssh_client is None:
+                self.connect()
+            sftp = self.ssh_client.open_sftp()
+            sftp.put(localPath, remotePath)
+            sftp.close()  # Zamknięcie połączenia SFTP po wykonaniu operacji
+            print(f"Plik {localPath} został przesłany na Raspberry Pi do {remotePath}.")
+        except Exception as e:
+            print(f"Wystąpił błąd podczas przesyłania pliku: {e}")
+
+class LightsON(RaspberryPi):
+    def start(self):
+        commands_to_run = [
+            "sudo chmod 777 -R RGB_LED_HAT",
+            "cd RGB_LED_HAT",
+            "sudo python3 RGB_LED_HAT/ws2812.py"
+        ]
+        if self.ssh_client is None:
+            self.connect()
+        try:
+            for command in commands_to_run:
+                stdin, stdout, stderr = self.ssh_client.exec_command(command)
+        except Exception as e:
+            sg.Popup(f"Wystąpił błąd podczas wykonywania komend: {e}")
+
+class LightsCode():
+    pass
+
+
+#file_transfer = FileTransferIn('raspberryfrez', 'pi','student')
+#file_transfer.transferFile("C:\\Users\\gerfr\\PycharmProjects\\raspberry\\Lights.py", '/home/pi/xd2.py')
+#WYJEBALEM W NIEDZIELE
+
+#xd = LightsON('raspberryfrez', 'pi','student')
+#xd.start()
+
+
+#gut dziala
+
+
+def run_commands_on_raspberry_pi(ip_address, username, password, commands):
+    try:
+        # Utwórz klienta SSH
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        client.connect(ip_address, username=username, password=password)
+        print('xd')
+        # Wykonaj komendy na Raspberry Pi
+        for command in commands:
+            stdin, stdout, stderr = client.exec_command(command)
+            print(stdout.read().decode('utf-8'))
+            print(stderr.read().decode('utf-8'))
+
+        # Zakończ połączenie SSH
+        client.close()
+        print("Komendy zostały wykonane na Raspberry Pi.")
+    except Exception as e:
+        print(f"Wystąpił błąd podczas wykonywania komend: {e}")
+
+# Dane logowania do Raspberry Pi
+raspberry_pi_ip = "raspberryfrez.local"
+raspberry_pi_username = "pi"
+raspberry_pi_password = "student"
+
+# Lista komend do wykonania
+commands_to_run = [
+    "pkill -f xd2.py"
+    "sudo python3 /home/pi/xd2.py"
+]
+
+# Wywołanie funkcji uruchamiającej komendy na Raspberry Pi
+#run_commands_on_raspberry_pi(raspberry_pi_ip, raspberry_pi_username, raspberry_pi_password, commands_to_run)
+#CHYBA POTRZEBNE WYJEBALEM W NIEDZIZELE
+
+# class downloadFile():
+#     # Jeśli użytkownik nie wybrał ścieżki, zakończ funkcję
+#     if not path:
+#         return
+#
+#     # Nazwa pliku, do którego zapiszemy dane
+#     filename = 'dane.txt'
+#
+#     # Pełna ścieżka do pliku
+#     file_path = f"{path}/{filename}"
+#
+#     # Otwieramy plik w trybie zapisu i zapisujemy dane
+#     with open(file_path, 'w') as file:
+#         file.write(f'Imię: {name}\n')
+#         file.write(f'Wiek: {age}\n')
