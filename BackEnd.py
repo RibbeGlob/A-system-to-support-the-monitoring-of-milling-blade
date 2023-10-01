@@ -2,19 +2,16 @@ import os
 import paramiko
 import PySimpleGUI as sg
 
-
-class Json:
-    pass
-
-
-class IntegracjaGraficzna:
-    def __init__(self, color):
-        self.color = color
-
-    def graphicPopUp(self):
-        if self.color is not None:
-            sg.popup(f'Wybrany kolor: {self.color}')
-
+def changingNameToRGB(kolor):
+    kolory = {
+        "Cyjan": [255, 0, 0],
+        "Magenta": [0, 255, 0],
+        "Żółty": [0, 0, 255],
+        "Czarny": [255, 255, 255],
+        "Niebieski": [255, 255, 0],
+        "Czerwony": [0, 255, 255]
+    }
+    return kolory.get(kolor, [255, 255, 255])
 
 
 class RaspberryPi:
@@ -24,14 +21,14 @@ class RaspberryPi:
         self.username = username
         self.password = password
 
-
     def connect(self):
         try:
             client = paramiko.SSHClient()
             client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             client.connect(self.ipAddress, username=self.username, password=self.password)
             self.ssh_client = client
-            return True
+            y = Camera("raspberryfrez", 'pi', 'student')
+            y.take_photo("/home/pi/", 10)
         except paramiko.AuthenticationException:
             sg.popup_error("Błąd uwierzytelniania. Sprawdź nazwę użytkownika i hasło.")
             return False
@@ -62,6 +59,8 @@ class Camera(RaspberryPi):
             return photoPath
         except paramiko.SSHException as e:
             sg.Popup('Błąd SSH', f'Wystąpił błąd SSH: {str(e)}')
+
+
 
 class FileTransferOut(RaspberryPi):
     def download_folder(self, remotePath, localPath):
@@ -142,21 +141,21 @@ def run_commands_on_raspberry_pi(ip_address, username, password, commands):
     except Exception as e:
         print(f"Wystąpił błąd podczas wykonywania komend: {e}")
 
-# Dane logowania do Raspberry Pi
-raspberry_pi_ip = "raspberryfrez.local"
-raspberry_pi_username = "pi"
-raspberry_pi_password = "student"
-
-# Lista komend do wykonania
-commands_to_run = [
-    "pkill -f xd2.py"
-    "sudo python3 /home/pi/xd2.py"
-]
+# # Dane logowania do Raspberry Pi
+# raspberry_pi_ip = "raspberryfrez.local"
+# raspberry_pi_username = "pi"
+# raspberry_pi_password = "student"
+#
+# # Lista komend do wykonania
+# commands_to_run = [
+#     "pkill -f xd2.py"
+#     "sudo python3 /home/pi/xd2.py"
+# ]
 
 # Wywołanie funkcji uruchamiającej komendy na Raspberry Pi
-#run_commands_on_raspberry_pi(raspberry_pi_ip, raspberry_pi_username, raspberry_pi_password, commands_to_run)
-#CHYBA POTRZEBNE WYJEBALEM W NIEDZIZELE
-
+# run_commands_on_raspberry_pi(raspberry_pi_ip, raspberry_pi_username, raspberry_pi_password, commands_to_run)
+# CHYBA POTRZEBNE WYJEBALEM W NIEDZIZELE
+#
 # class downloadFile():
 #     # Jeśli użytkownik nie wybrał ścieżki, zakończ funkcję
 #     if not path:
