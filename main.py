@@ -86,11 +86,23 @@ class PolaczenieRaspberry(Szkielet):
 
     def checkConfiguration(self):
         try:
-            checkingConfiguration = jsc.FatherJSON("configJSON", None)
-            check = checkingConfiguration.readJSON()
+            checkingConfiguration = jsc.FatherJSON("configJSON", None)  # czytanie jsona
+            global check        #globalna cosik bydzie trzeba zmienic
+            check = checkingConfiguration.readJSON()        #pobranie danych z jsona config
             if check["ZALOGOWANY"] == True:
-                run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
-                run.gui()
+                i = 0
+                while i < 3:
+                    connection = BE.Connection(check["IP"], check["LOGIN"], check["PASSWORD"])
+                    logCheck = connection.connect()   #polaczenie z rpi
+                    if logCheck == True:
+                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
+                        run.gui()
+                        break
+                    else:
+                        # run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
+                        # run.gui()     #gui do testowania
+                        print(i)        #dodać czyszczenie jsona i conne
+                        i+=1
             else:
                 self.gui()
         except FileNotFoundError:
@@ -236,6 +248,14 @@ class MenuRaspberry(Szkielet):
             for light in ['-XL-', '-YL-', '-XP-', '-YP-']:
                 self.lightsList.append(values[light])
             print(self.lightsList)
+            createJson = jsc.LightsJSON(self.lightsList)
+            path = createJson.writeJSON()
+            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            send.sendIn(f"{path}\\lightsJSON.json", '/home/pi/Lights/lightsJSON.json')
+            send2 = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            send2.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
+            on = BE.LightsON(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start()
 
         def colorMenu(_):
             myColor = ColorMenu()
@@ -247,6 +267,8 @@ class MenuRaspberry(Szkielet):
             jsonLights = jsc.ToolsJSON()
             # noinspection PyUnresolvedReferences
             jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb], name=self.txt)
+            photo = BE.Photo(check["IP"], check["LOGIN"], check["PASSWORD"])
+            photo.takePhoto(4)
 
         def confirm(values):
             self.txt = values["-COMBO-"]
@@ -261,8 +283,16 @@ class MenuRaspberry(Szkielet):
                 self.menu = GraphicPUP(150, 80)
                 self.menu.gui("Zdefiniuj narzędzie")
 
+        # przycisk wyloguj
         def logout(_):
-            pass
+            x = jsc.DeleteConfig()
+            x.readJSON()            #czysci json
+            self.close()            #zamyka okno
+            self.menu = GraphicPUP(150, 80)     #Graficzny PopUp
+            self.menu.gui("Wylogowano")
+            myGui = PolaczenieRaspberry()       #Odpalenie od poczatku
+            myGui.checkConfiguration()
+
 
         # Mapowanie zdarzeń na odpowiednie funkcje obsługi
         mapa = {
