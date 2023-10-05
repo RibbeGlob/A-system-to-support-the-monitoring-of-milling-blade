@@ -29,6 +29,30 @@ class PathJSON(FatherJSON):
         self.data["PATH"] = args[0]
         super().writeJSON()
 
+class DeleteConfig(FatherJSON):
+    def __init__(self):
+        super().__init__("configJSON", None)
+
+    def readJSON(self):
+        try:
+            self.data = super().readJSON()
+            self.deleteJSON()
+        except FileNotFoundError:
+            print("Error plik JSON nie istnieje")
+        except json.decoder.JSONDecodeError:
+            print("Error plik JSON jest uszkodzony")
+
+    def deleteJSON(self):
+        try:
+            for key in self.data:
+                if key == "WERSJA":
+                    self.data[key] = "G1.0"
+                else:
+                    self.data[key] = None
+            super().writeJSON()
+        except Exception as e:
+            print(f"Wystąpił nieoczekiwany błąd: {str(e)}")
+
 
 class ToolsJSON(FatherJSON):
     def __init__(self):
@@ -78,7 +102,7 @@ class toolsConfirm(FatherJSON):
     def deleteJSON(self):
         try:
             firstKey = next(iter(self.check))
-            self.check.pop(firstKey, None)
+            self.check.pop(firstKey, None)      #usuniecie klucza
             self.data = self.check
             super().writeJSON()
             return self.data
@@ -92,7 +116,14 @@ class toolsConfirm(FatherJSON):
         }
         self.check[self.name.upper()] = empty
 
+class LightsJSON(FatherJSON):
+    def __init__(self, data):
+        super().__init__("lightsJSON", data)
+        self.jsonPath = f"{self.jsonPath[:-4]}Lights"
 
+    def writeJSON(self):
+        super().writeJSON()
+        return self.jsonPath
 
 
 
