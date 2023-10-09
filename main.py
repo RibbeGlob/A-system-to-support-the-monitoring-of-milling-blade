@@ -3,16 +3,30 @@ from abc import ABC, abstractmethod
 import BackEnd as BE
 import JSON.JSONscrypt as jsc
 import json
+import time
 
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        execution_time = end_time - start_time
+        print(f"Czas wykonania funkcji '{func.__name__}': {execution_time} sekund")
+        return result
+    return wrapper
 
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
+        # Nazwa okna + rozmiar okna
         super().__init__(title="cutterGuardingGauge", size=pole)
-        self.textStyle = []  # Lista, styli tekstowych (argv[0] zawsze przyjmuje jako argument)
+        # Lista, styli tekstowych (argv[0] zawsze przyjmuje jako argument)
+        self.textStyle = []
         self.zamkniecie = False
         for iterator in argv[0]:
             self.textStyle.append({'size': iterator})
 
+    # Metoda odpowiedzialna za wyświetlanie graficzne programu (konieczna do działania klasy)
     @abstractmethod
     def gui(self, *args):
         # przyjęcie interfejsu przez args
@@ -20,7 +34,7 @@ class Szkielet(sg.Window, ABC):
         self.layout([[self.interfejs]])
         self.run(None)
 
-    # Statyczna metoda konieczna do odpaleniu interfejsu
+    # Metoda obsługująca elementy GUI np. przyciski itp (konieczna do działania klasy)
     @abstractmethod
     def run(self, mapa, basicEvent = None):
         # metoda zamykająca okno (basicEvent musi być zdefiniowany)
@@ -53,6 +67,7 @@ class Szkielet(sg.Window, ABC):
             pass
 
 
+# Klasa wyświetlająca graficzny pop up
 class GraphicPUP(Szkielet):
     def __init__(self, x, y):
         pole = (x, y)
@@ -239,9 +254,9 @@ class MenuRaspberry(Szkielet):
                 self[iterator].update(readonly=True)
 
         def searchFolder(values):
-            folderPath = values["-FOLDER-"]
+            self.folderPath = values["-FOLDER-"]
             path = jsc.PathJSON()
-            path.writeJSON(folderPath)
+            path.writeJSON(self.folderPath)
 
         def lights(values):
             self.lightsList.clear()
@@ -250,32 +265,47 @@ class MenuRaspberry(Szkielet):
             print(self.lightsList)
             createJson = jsc.LightsJSON(self.lightsList)
             path = createJson.writeJSON()
+            # Wysyłanie do RPI JSONA z informacjami o ustawionym świetle + programu odpalającego światło, następie
+            # Odpalenie światełek
             send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
             send.sendIn(f"{path}\\lightsJSON.json", '/home/pi/Lights/lightsJSON.json')
+            print('przeslano json')
             send2 = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
             send2.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
-            on = BE.LightsON(check["IP"], check["LOGIN"], check["PASSWORD"])
-            on.start()
+            print('przeslano lights')
+            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start("sudo python3 /home/pi/Lights/lights.py")
 
         def colorMenu(_):
+            # Wyświetlanie menu z dostępnymi kolorami frezu, changing name zmienia nazwę na kontrastowe RGB
             myColor = ColorMenu()
             color = myColor.gui()
             self.rgb = BE.changingNameToRGB(color)
             print(self.rgb)
 
         def picture(_):
+            currentDate = time.strftime('%Y-%m-%d')
+            # noinspection PyUnresolvedReferences
+            pictureName = f'{self.txt}_{currentDate}'   #Nazwa folderu z dzisiejsza data
             jsonLights = jsc.ToolsJSON()
             # noinspection PyUnresolvedReferences
             jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb], name=self.txt)
+            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
+            # noinspection PyUnresolvedReferences
+            BE.createFolder(f'{self.folderPath}\\testowanazwa')
             photo = BE.Photo(check["IP"], check["LOGIN"], check["PASSWORD"])
-            photo.takePhoto(4)
+            photo.takePhoto(20, f'/home/pi/{pictureName}')
+            # noinspection PyUnresolvedReferences
+            photo.sendOut(f'{self.folderPath}\\testowanazwa')
 
+        # przycisk potwierdzający wybór narzędzia
         def confirm(values):
             self.txt = values["-COMBO-"]
             if bool(self.txt):
                 confirmButton = jsc.toolsConfirm(self.txt)
-                actually = confirmButton.readJSON()
-                self.toolList = actually
+                self.actually = confirmButton.readJSON()
+                self.toolList = self.actually
                 self["-COMBO-"].update(values=list(self.toolList.keys()))
                 self["-COMBO-"](self.txt)
                 self["-PICTURE-"].update(disabled=False)
