@@ -107,6 +107,7 @@ class PolaczenieRaspberry(Szkielet):
             if check["ZALOGOWANY"] == True:
                 i = 0
                 while i < 3:
+                    # zmiana do sprawdzenia gui
                     connection = BE.Connection(check["IP"], check["LOGIN"], check["PASSWORD"])
                     logCheck = connection.connect()   #polaczenie z rpi
                     if logCheck == True:
@@ -114,8 +115,8 @@ class PolaczenieRaspberry(Szkielet):
                         run.gui()
                         break
                     else:
-                        # run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
-                        # run.gui()     #gui do testowania
+                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
+                        run.gui()     #gui do testowania
                         print(i)        #dodać czyszczenie jsona i conne
                         i+=1
             else:
@@ -232,9 +233,10 @@ class MenuRaspberry(Szkielet):
                           sg.Slider(range=(-4, 4), size=(4, 16), orientation="v", default_value=0, key='-YP-')]
                      ])
                      ],
-                    [sg.Button("Wykonaj zdjęcie", size=(10, 5), key="-PICTURE-", disabled = True),
-                     sg.Button("Ustaw światło", size=(10, 5), key="-LIGHTBUTTON-"),
-                     sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(15, 5), key="-COLORBUTTON-")],
+                    [sg.Button("Wykonaj zdjęcie", size=(8, 5), key="-PICTURE-", disabled = True),
+                     sg.Button("Ustaw światło", size=(8, 5), key="-LIGHTBUTTON-"),
+                     sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(8, 5), key="-COLORBUTTON-"),
+                     sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-")],
                     [sg.Text(f"Zalogowano do: {self.ip}", key="-TXTLOGGED-"),
                      sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))])
 
@@ -275,6 +277,10 @@ class MenuRaspberry(Szkielet):
             print('przeslano lights')
             on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
             on.start("sudo python3 /home/pi/Lights/lights.py")
+
+        def showPicture(_):
+            photoMenu = PictureMenu()
+            photoMenu.gui()
 
         def colorMenu(_):
             # Wyświetlanie menu z dostępnymi kolorami frezu, changing name zmienia nazwę na kontrastowe RGB
@@ -333,12 +339,38 @@ class MenuRaspberry(Szkielet):
             "-COLORBUTTON-": colorMenu,
             "-PICTURE-": picture,
             "-CONFIRM-": confirm,
-            "-LOGOUT-": logout
+            "-LOGOUT-": logout,
+            "-SHOWPICTURE-": showPicture
         }
 
         super().run(mapa)
 
     def backEndIntegration(self):
+        pass
+
+
+class PictureMenu(Szkielet):
+    def __init__(self):
+        pole = (150, 150)
+        textLength = [(22, 1), (36, 1)]
+        super().__init__(pole, textLength)
+
+    def gui(self, *args):
+        super().gui([sg.Text('Wybierz kolor frezu')],
+                    [sg.Slider(range=(-8, 8), size=(11, 16), default_value=0, orientation='h', key='-XL-')],
+            [sg.Button('Potwierdź', size=14,  key='-BC-')])
+
+    def run(self, mapa, basicEvent = None):
+        map = {
+            '-BC-': self.colorButton,
+        }
+        super().run(map)
+
+    def colorButton(self, values):
+        self.selectedColor = values['-COLORLIST-'][0] if values['-COLORLIST-'] else None
+        self.buttonEffect('-BC-', 'Połącz', self.backEndIntegration(self.selectedColor))
+
+    def backEndIntegration(self, kolor):
         pass
 
 def main():
