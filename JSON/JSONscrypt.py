@@ -1,5 +1,6 @@
 import json
 import os
+import PySimpleGUI as sg
 
 class FatherJSON:
     def __init__(self, jsonFile, data):
@@ -10,14 +11,48 @@ class FatherJSON:
 
     # Tworzenie nowego pliku JSON
     def writeJSON(self):
-        with open(f"{self.jsonPath}\\{self.jsonFile}.json", "w") as fileJSON:
-            json.dump(self.data, fileJSON)
-            print('xd')
+        try:
+            with open(f"{self.jsonPath}\\{self.jsonFile}.json", "w") as fileJSON:
+                json.dump(self.data, fileJSON)
+        except FileNotFoundError:
+            sg.popup_error("Error plik JSON nie istnieje")
+        except json.decoder.JSONDecodeError:
+            sg.popup_error("Error plik JSON jest uszkodzony")
+        except Exception as e:
+            sg.popup_error(f"Wystąpił nieoczekiwany błąd: {str(e)}")
 
     # Czytanie pliku JSON
     def readJSON(self):
-        with open(f"{self.jsonPath}\\{self.jsonFile}.json", "r") as fileJSON:
-            return json.load(fileJSON)
+        try:
+            with open(f"{self.jsonPath}\\{self.jsonFile}.json", "r") as fileJSON:
+                return json.load(fileJSON)
+        except FileNotFoundError:
+            sg.popup_error("Error plik JSON nie istnieje")
+        except json.decoder.JSONDecodeError:
+            sg.popup_error("Error plik JSON jest uszkodzony")
+        except Exception as e:
+            sg.popup_error(f"Wystąpił nieoczekiwany błąd: {str(e)}")
+
+
+class AppendJSON(FatherJSON):
+    def __init__(self, keyName, configuration, color):
+        self.keyName = keyName
+        self.configuration = configuration
+        self.color = color
+        super().__init__("toolsJSON", None)
+
+    def writeJSON(self):
+        self.data[self.keyName]["USTAWIENIE"].append([self.configuration])
+        self.data[self.keyName]["KOLOR"].append([self.color])
+        increment = lambda: self.data[self.keyName].update(ITERACJA=self.data[self.keyName]["ITERACJA"] + 1)
+        increment()
+        super().writeJSON()
+
+
+    def readJSON(self):
+        self.data = super().readJSON()
+        self.writeJSON()
+
 
 # JSON do ścieżki
 class PathJSON(FatherJSON):
@@ -29,29 +64,23 @@ class PathJSON(FatherJSON):
         self.data["PATH"] = args[0]
         super().writeJSON()
 
+
+# Klasa odpowiedzialna za usuwanie Klucza w JSONIE
 class DeleteConfig(FatherJSON):
     def __init__(self):
         super().__init__("configJSON", None)
 
     def readJSON(self):
-        try:
-            self.data = super().readJSON()
-            self.deleteJSON()
-        except FileNotFoundError:
-            print("Error plik JSON nie istnieje")
-        except json.decoder.JSONDecodeError:
-            print("Error plik JSON jest uszkodzony")
+        self.data = super().readJSON()
+        self.deleteJSON()
 
     def deleteJSON(self):
-        try:
-            for key in self.data:
-                if key == "WERSJA":
-                    self.data[key] = "G1.0"
-                else:
-                    self.data[key] = None
-            super().writeJSON()
-        except Exception as e:
-            print(f"Wystąpił nieoczekiwany błąd: {str(e)}")
+        for key in self.data:
+            if key == "WERSJA":
+                self.data[key] = "G1.0"
+            else:
+                self.data[key] = None
+        super().writeJSON()
 
 
 class ToolsJSON(FatherJSON):
@@ -60,44 +89,35 @@ class ToolsJSON(FatherJSON):
 
     # Pisanie daty do stworzonego pliku JSON (NIE TWORZYMY NOWEGO)
     def writeJSON(self, **kwargs):
-        newTool = {"USTAWIENIE": kwargs["settings"], "KOLOR": kwargs["color"]}
+        newTool = {"USTAWIENIE": kwargs["settings"], "KOLOR": kwargs["color"],
+                   "ITERACJA": kwargs["iteracja"], "PATH": kwargs["path"]}
         self.data = super().readJSON()
         self.data[kwargs["name"].upper()] = newTool
         super().writeJSON()
 
     # Czytanie pliku JSON
     def readJSON(self):
-        try:
-            readData = super().readJSON()
-            klucze = list(readData.keys())
-            return klucze
-        except FileNotFoundError:
-            print("Error plik JSON nie istnieje")
-        except json.decoder.JSONDecodeError:
-            print("Error plik JSON jest uszkodzony")
+        readData = super().readJSON()
+        klucze = list(readData.keys())
+        return klucze
 
 
-# odblokuj mozliwosc po zatwierdzeniu nazwy
 class toolsConfirm(FatherJSON):
     def __init__(self, data):
         super().__init__("toolsJSON", None)
         self.name = data
 
     def readJSON(self):
-        try:
-            self.check = super().readJSON()
-            self.writeJSON()
-            if len(self.check) >= 4:
-                actually = self.deleteJSON()
-                return actually
-            else:
-                self.data = self.check
-                super().writeJSON()
-                return self.data
-        except FileNotFoundError:
-            print("Error plik JSON nie istnieje")
-        except json.decoder.JSONDecodeError:
-            print("Error plik JSON jest uszkodzony")
+        self.check = super().readJSON()
+        # self.writeJSON()
+        if len(self.check) >= 4:
+            actually = self.deleteJSON()
+            return actually
+        else:
+            self.data = self.check
+            super().writeJSON()
+            return self.data
+
 
     def deleteJSON(self):
         try:
@@ -111,10 +131,9 @@ class toolsConfirm(FatherJSON):
 
     def writeJSON(self):
         empty = {
-            "USTAWIENIE": [],
-            "KOLOR": []
         }
         self.check[self.name.upper()] = empty
+
 
 class LightsJSON(FatherJSON):
     def __init__(self, data):
@@ -124,9 +143,4 @@ class LightsJSON(FatherJSON):
     def writeJSON(self):
         super().writeJSON()
         return self.jsonPath
-
-
-
-
-
 
