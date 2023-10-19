@@ -3,18 +3,10 @@ from abc import ABC, abstractmethod
 import BackEnd as BE
 import JSON.JSONscrypt as jsc
 import json
-import time
+from PIL import Image, ImageTk
+import os
+# Dodać create folder na pc w checkowaniu ilości zdjęć  + zaimplementować robienie zdjęć
 
-
-def measure_time(func):
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-        execution_time = end_time - start_time
-        print(f"Czas wykonania funkcji '{func.__name__}': {execution_time} sekund")
-        return result
-    return wrapper
 
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
@@ -115,9 +107,9 @@ class PolaczenieRaspberry(Szkielet):
                         run.gui()
                         break
                     else:
-                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
-                        run.gui()     #gui do testowania
-                        print(i)        #dodać czyszczenie jsona i conne
+                        # run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
+                        # run.gui()     #gui do testowania
+                        # print(i)        #dodać czyszczenie jsona i conne
                         i+=1
             else:
                 self.gui()
@@ -171,6 +163,7 @@ class ColorMenu(Szkielet):
     def __init__(self):
         pole = (150, 150)
         textLength = [(22, 1), (36, 1)]
+        self.selectedColor = None
         self.colors = ['Czarny', 'Cyjan', 'Magenta', 'Żółty', 'Niebieski', 'Czerwony']   #trzeba dodac kontrast
         super().__init__(pole, textLength)
 
@@ -189,12 +182,12 @@ class ColorMenu(Szkielet):
 
     def colorButton(self, values):
         self.selectedColor = values['-COLORLIST-'][0] if values['-COLORLIST-'] else None
-        self.buttonEffect('-BC-', 'Połącz', self.backEndIntegration(self.selectedColor))
+        self.buttonEffect('-BC-', 'Połącz', self.backEndIntegration())
 
-    def backEndIntegration(self, kolor):
-        if kolor is not None:
+    def backEndIntegration(self):
+        if self.selectedColor is not None:
             self.menu = GraphicPUP(200, 80)
-            self.menu.gui(f"Wybrany kolor: {kolor}")
+            self.menu.gui(f"Wybrany kolor: {self.selectedColor}")
             self.zamkniecie = True
             self.close()
         else:
@@ -204,26 +197,34 @@ class ColorMenu(Szkielet):
 # Klasa odpowiedzialna za główne menu RPI
 class MenuRaspberry(Szkielet):
     def __init__(self, ip, login, password, path):
+        self.iteracja = 1
+        self.angle = 0
         self.colorCutter = ""
         self.ip, self.login, self.password, self.path = ip, login, password, path
         self.lightsList = [0, 0, 0, 0]
         self.rgb = [0, 0, 0]
-        pole = (350, 390)
+        pole = (350, 480)
         textLength = [(22, 1), (36, 1)]
         xd = jsc.ToolsJSON()
         self.toolList = xd.readJSON()
+        self.checkIfNewTool = 0
         super().__init__(pole, textLength)
 
     def gui(self, *args):
         super().gui([sg.Text("Czy jest to nowe narzędzie? ", **self.textStyle[0]),
-                     sg.Radio("Tak", "RADIO", enable_events=True, default=True, key="-YES-"),
-                     sg.Radio("Nie", "RADIO", enable_events=True, default=False, key="-NO-")],
+                     sg.Radio("Tak", "RADIO", enable_events=True, default=False, key="-YES-"),
+                     sg.Radio("Nie", "RADIO", enable_events=True, default=True, key="-NO-")],
                     [sg.Text("Wprowadź lub wybierz z listy nazwę narzędzia", key="-TXT-", visible=True)],
-                    [sg.InputCombo(self.toolList, size=(32, 1), key="-COMBO-", readonly=False),
+                    [sg.InputCombo(self.toolList, size=(32, 1), key="-COMBO-", readonly=True),
                      sg.Button("Potwierdź", size=(8, 1), key="-CONFIRM-", disabled=False)],
                     [sg.Text("Wybierz ścieżkę zapisu pliku na komputerze")],
                     [sg.Input(key="-FOLDER-", default_text=self.path, enable_events=True, **self.textStyle[1]),
                      sg.FolderBrowse(button_text="Wybierz", key="-BROWSE-")],
+                    [sg.Text("Określ liczbę zdjęć do wykonania")],
+                    [sg.Input(key="-ANGLE-", enable_events=True, size=(34, 1)),
+                     sg.Button("Potwierdź", size=(8, 1), key="-ANGLECONFIRM-")],
+                    [sg.Text(f"Aktualny kąt obrotu ostrza: {self.angle} stopni",
+                             **self.textStyle[1], key="-ANGLEOUTPUT-")],
                     [sg.Frame('Lewe oświetlenie', [
                         [sg.Slider(range=(-8, 8), size=(11, 16), default_value=0, orientation='h', key='-XL-'),
                          sg.Slider(range=(-4, 4), size=(4, 16), orientation="v", default_value=0, key='-YL-')]
@@ -236,24 +237,27 @@ class MenuRaspberry(Szkielet):
                     [sg.Button("Wykonaj zdjęcie", size=(8, 5), key="-PICTURE-", disabled = True),
                      sg.Button("Ustaw światło", size=(8, 5), key="-LIGHTBUTTON-"),
                      sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(8, 5), key="-COLORBUTTON-"),
-                     sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-")],
-                    [sg.Text(f"Zalogowano do: {self.ip}", key="-TXTLOGGED-"),
+                     sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-", disabled=True)],
+                    [sg.Text(f"Zalogowano do: {self.ip}", key="-TXTLOGGED-"), sg.Push(),
                      sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))])
 
     def run(self, mapa, basicEvent = None):
-
         # noinspection PyRedeclaration
         def basicEvent(_):
             for iterator in ["-COMBO-"]:
                 self[iterator].update(readonly=False)
 
         def radioYesButton(_):
+            self.checkIfNewTool = 1
             for iterator in ["-COMBO-"]:
                 self[iterator].update(readonly=False)
 
+
         def radioNoButton(_):
+            self.checkIfNewTool = 0
             for iterator in ["-COMBO-"]:
                 self[iterator].update(readonly=True)
+
 
         def searchFolder(values):
             self.folderPath = values["-FOLDER-"]
@@ -269,45 +273,72 @@ class MenuRaspberry(Szkielet):
             path = createJson.writeJSON()
             # Wysyłanie do RPI JSONA z informacjami o ustawionym świetle + programu odpalającego światło, następie
             # Odpalenie światełek
-            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            send.sendIn(f"{path}\\lightsJSON.json", '/home/pi/Lights/lightsJSON.json')
+            #send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            #send.sendIn(f"{path}\\lightsJSON.json", '/home/pi/Lights/lightsJSON.json')
             print('przeslano json')
-            send2 = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            send2.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
+            #send2 = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            #send2.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
             print('przeslano lights')
-            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            on.start("sudo python3 /home/pi/Lights/lights.py")
+            #on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            #on.start("sudo python3 /home/pi/Lights/lights.py")
 
+        # Przycisk odpowiadający za podgląd zdjęć
         def showPicture(_):
-            photoMenu = PictureMenu()
+            # noinspection PyUnresolvedReferences
+            photoMenu = PictureMenu(self.txt)
             photoMenu.gui()
 
+        # Przycisk odpowiadajacy za menu wyboru koloru frezu
         def colorMenu(_):
-            # Wyświetlanie menu z dostępnymi kolorami frezu, changing name zmienia nazwę na kontrastowe RGB
+            # changing name zmienia nazwę na kontrastowe RGB
             myColor = ColorMenu()
             color = myColor.gui()
             self.rgb = BE.changingNameToRGB(color)
             print(self.rgb)
 
+        # Puste aby działała aktualizacja kąta
+        def angle(_):
+            pass
+
+        # Potwierdzenie wyboru ilosci zdjec
+        def angleConfirm(values):
+            try:
+                self.entered_angle = int(values["-ANGLE-"])
+                print(self.entered_angle)
+                # Przeliczanie ilości zdjęć na kąt obrotu frezu
+                self.angle = round(360 / self.entered_angle, 3)
+                # Update the text of the element with key "-ANGLEOUTPUT-"
+                self["-ANGLEOUTPUT-"].update(f"Aktualny kąt obrotu ostrza: {self.angle} stopni")
+            except ValueError:
+                sg.popup_error('Błędna wartość')
+
+        # Przycisk odpowiadający za wykonywanie zdjęć
         def picture(_):
-            currentDate = time.strftime('%Y-%m-%d')
             # noinspection PyUnresolvedReferences
-            pictureName = f'{self.txt}_{currentDate}'   #Nazwa folderu z dzisiejsza data
-            jsonLights = jsc.ToolsJSON()
+            pictureName = f'{self.txt}'   #Nazwa folderu z dzisiejsza data
+            if self.checkIfNewTool == 0:        # Jeżeli nie jest to nowe narzędzie to dodaje do listy toolsjson
+                # noinspection PyUnresolvedReferences
+                appendToJSON = jsc.AppendJSON(self.txt.upper(), self.lightsList, self.rgb)
+                appendToJSON.readJSON()
+            else:           #jeżeli nowe narzędzie to tworzy nowy key w jsonie
+                self.checkIfNewTool -= 1        # Unika się nadpisywania tylko przechodzi do appendu
+                jsonLights = jsc.ToolsJSON()
+                # noinspection PyUnresolvedReferences
+                jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb],
+                                     name=self.txt, iteracja=self.iteracja, path=self.folderPath)
+            #on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            #on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
             # noinspection PyUnresolvedReferences
-            jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb], name=self.txt)
-            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
+            #BE.createFolder(f'{self.folderPath}\\testowanazwa')
+            #photo = BE.Photo(check["IP"], check["LOGIN"], check["PASSWORD"])
             # noinspection PyUnresolvedReferences
-            BE.createFolder(f'{self.folderPath}\\testowanazwa')
-            photo = BE.Photo(check["IP"], check["LOGIN"], check["PASSWORD"])
-            photo.takePhoto(20, f'/home/pi/{pictureName}')
+            #photo.takePhoto(self.entered_angle, f'/home/pi/{pictureName}')      #Do zmiany
             # noinspection PyUnresolvedReferences
-            photo.sendOut(f'{self.folderPath}\\testowanazwa')
+            #photo.sendOut(f'{self.folderPath}\\testowanazwa')
 
         # przycisk potwierdzający wybór narzędzia
         def confirm(values):
-            self.txt = values["-COMBO-"]
+            self.txt = values["-COMBO-"]        # Pobranie wartości z comboboxa
             if bool(self.txt):
                 confirmButton = jsc.toolsConfirm(self.txt)
                 self.actually = confirmButton.readJSON()
@@ -315,9 +346,10 @@ class MenuRaspberry(Szkielet):
                 self["-COMBO-"].update(values=list(self.toolList.keys()))
                 self["-COMBO-"](self.txt)
                 self["-PICTURE-"].update(disabled=False)
+                self["-SHOWPICTURE-"].update(disabled=False)
             else:
-                self.menu = GraphicPUP(150, 80)
-                self.menu.gui("Zdefiniuj narzędzie")
+                sg.popup_error("Zdefiniuj narzędzie")
+
 
         # przycisk wyloguj
         def logout(_):
@@ -340,7 +372,9 @@ class MenuRaspberry(Szkielet):
             "-PICTURE-": picture,
             "-CONFIRM-": confirm,
             "-LOGOUT-": logout,
-            "-SHOWPICTURE-": showPicture
+            "-SHOWPICTURE-": showPicture,
+            "-ANGLE-": angle,
+            "-ANGLECONFIRM-": angleConfirm,
         }
 
         super().run(mapa)
@@ -348,34 +382,70 @@ class MenuRaspberry(Szkielet):
     def backEndIntegration(self):
         pass
 
-
+# wjebac to do jsona i chuj
 class PictureMenu(Szkielet):
-    def __init__(self):
-        pole = (150, 150)
+    def __init__(self, txt):
+        keyRead = jsc.FatherJSON("toolsJSON", None)
+        keyPath = keyRead.readJSON()
+        self.txt = txt
+        self.photoFolder = keyPath[str(self.txt)]["PATH"]
+        self.lightSlider = keyPath[str(self.txt)]["ITERACJA"]
+        self.pictureIndex = 1
+        self.pictureLight = 1
+        pole = (700, 500)
         textLength = [(22, 1), (36, 1)]
+        # Sprawdzenie ile jest zdjęć (kończących się na 1.png)
+        if os.path.exists(self.photoFolder) and os.path.isdir(self.photoFolder):
+            self.matching_files = [file for file in os.listdir(self.photoFolder) if file.endswith(f"1.png")]
+        self.defaultPhoto = os.path.join(self.photoFolder, "zdjecie1.1.png")
         super().__init__(pole, textLength)
 
     def gui(self, *args):
-        super().gui([sg.Text('Wybierz kolor frezu')],
-                    [sg.Slider(range=(-8, 8), size=(11, 16), default_value=0, orientation='h', key='-XL-')],
-            [sg.Button('Potwierdź', size=14,  key='-BC-')])
+        i = 0
+        super().gui([sg.Text(f"Aktualnie wyświetlane narzędzie {self.txt}")],
+                    [sg.Image(self.defaultPhoto, key="cutterGuardingGauge")],
+                    [sg.Text(f"Zmiana kąta ostrza o {i}")],
+                    [sg.Slider(range=(1, len(self.matching_files)), default_value=1, expand_x=True, enable_events=True,
+                               orientation='horizontal', key='-SP-')],
+                    [sg.Text("Zmiana oświetlenia ostrza")],
+                    [sg.Slider(range=(1, self.lightSlider), default_value=1, expand_x=True, enable_events=True,
+                               orientation='horizontal', key='-SL-')]
+                    )
+
 
     def run(self, mapa, basicEvent = None):
+        def pictureSlider(values):
+            my_dict = values
+            self.pictureIndex = int(my_dict['-SP-'])
+            self.updatePicture()
+
+        def lightSlider(values):
+            my_dict = values
+            self.pictureLight = int(my_dict['-SL-'])
+            self.updatePicture()
+
         map = {
-            '-BC-': self.colorButton,
+            '-SP-': pictureSlider,
+            '-SL-': lightSlider
         }
+
         super().run(map)
 
-    def colorButton(self, values):
-        self.selectedColor = values['-COLORLIST-'][0] if values['-COLORLIST-'] else None
-        self.buttonEffect('-BC-', 'Połącz', self.backEndIntegration(self.selectedColor))
+
+    def updatePicture(self):
+        photoPath = os.path.join(self.photoFolder, f'zdjecie{self.pictureIndex}.{self.pictureLight}.png')
+        original_image = Image.open(photoPath)
+        photo_image = ImageTk.PhotoImage(original_image)
+        self._window_that_exited["cutterGuardingGauge"].update(data=photo_image)
 
     def backEndIntegration(self, kolor):
         pass
 
 def main():
-    myGui = PolaczenieRaspberry()
-    myGui.checkConfiguration()
+    # myGui = PolaczenieRaspberry()
+    # myGui.checkConfiguration()
+    run = MenuRaspberry('c', 'c', 'c', 'c')
+    run.gui()
 
 if __name__ == "__main__":
     main()

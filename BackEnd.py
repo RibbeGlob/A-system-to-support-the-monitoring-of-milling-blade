@@ -3,7 +3,7 @@ import paramiko
 import PySimpleGUI as sg
 import time
 
-# za jednym sendem wszyscko i wyjebac connecty
+# za jednym sendem wszyscko i wyjebac connecty/ wysyłać tylko jsony do rpi/lights i zdjecie do jednego wjebac i chuj
 def measure_time(func):
     def wrapper(*args, **kwargs):
         start_time = time.time()
@@ -123,11 +123,11 @@ class Commands(Connection):
 # Wybranie koloru oraz automatyczny kontrast
 def changingNameToRGB(kolor):
     kolory = {
-        "1": [255, 0, 0],
-        "2": [0, 255, 0],
-        "3": [0, 0, 255],
-        "4": [255, 255, 255],
-        "5": [255, 255, 0],
-        "6": [0, 255, 255]
+        "Czarny": [255, 0, 0],
+        "Cyjan": [0, 255, 0],
+        "Magenta": [0, 0, 255],
+        "Żółty": [255, 255, 255],
+        "Niebieski": [255, 255, 0],
+        "Czerwony": [0, 255, 255]
     }
     return kolory.get(kolor, [255, 255, 255])
