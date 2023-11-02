@@ -13,7 +13,7 @@ class FatherJSON:
     def writeJSON(self):
         try:
             with open(f"{self.jsonPath}\\{self.jsonFile}.json", "w") as fileJSON:
-                json.dump(self.data, fileJSON)
+                json.dump(self.data, fileJSON, indent=2)
         except FileNotFoundError:
             sg.popup_error("Error plik JSON nie istnieje")
         except json.decoder.JSONDecodeError:
@@ -137,10 +137,33 @@ class toolsConfirm(FatherJSON):
 
 class LightsJSON(FatherJSON):
     def __init__(self, data):
-        super().__init__("lightsJSON", data)
+        super().__init__("lightsAndIterationJSON", data)
         self.jsonPath = f"{self.jsonPath[:-4]}Lights"
 
     def writeJSON(self):
         super().writeJSON()
+        return self.jsonPath
+
+    def appendJSON(self):
+        try:
+            with open(f"{self.jsonPath}/{self.jsonFile}.json", "r+") as fileJSON:
+                try:
+                    existing_data = json.load(fileJSON)
+                except json.decoder.JSONDecodeError:
+                    existing_data = {}  # In case the file is empty or not valid JSON
+                # Dodaj nowe dane do istniejącego obiektu JSON
+                existing_data.update(self.data)
+                # Przejdź na początek pliku, wyczyść zawartość i zapisz zaktualizowane dane
+                fileJSON.seek(0)
+                fileJSON.truncate()
+                json.dump(existing_data, fileJSON, indent=2)
+        except FileNotFoundError:
+            sg.popup_error("Error plik JSON nie istnieje")
+        except json.decoder.JSONDecodeError:
+            sg.popup_error("Error plik JSON jest uszkodzony")
+        except Exception as e:
+            sg.popup_error(f"Wystąpił nieoczekiwany błąd: {str(e)}")
+
+    def returnPath(self):
         return self.jsonPath
 
