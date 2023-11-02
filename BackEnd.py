@@ -108,16 +108,9 @@ class Photo(Connection):
 @measure_time
 class Commands(Connection):
     def start(self, *args):
-        commands = args[0]
-        print('przed connectem')
         self.connect()
-        try:
-            # stdin, stdout, stderr =
-            self.client.exec_command(commands)
-        except Exception as e:
-            sg.Popup(f"Wystąpił błąd podczas wykonywania komend: {e}")
-        finally:
-            self.client.close()
+        commands = args[0]
+        self.client.exec_command(commands)
 
 
 # Wybranie koloru oraz automatyczny kontrast

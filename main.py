@@ -6,7 +6,7 @@ import json
 from PIL import Image, ImageTk
 import os
 # Dodać create folder na pc w checkowaniu ilości zdjęć  + zaimplementować robienie zdjęć
-
+# DOdać odblokowanie przycisku po confirmie angle + wjebac do jednego jsona
 
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
@@ -103,7 +103,7 @@ class PolaczenieRaspberry(Szkielet):
                     connection = BE.Connection(check["IP"], check["LOGIN"], check["PASSWORD"])
                     logCheck = connection.connect()   #polaczenie z rpi
                     if logCheck == True:
-                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"], check["PATH"])
+                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"])
                         run.gui()
                         break
                     else:
@@ -149,13 +149,11 @@ class PolaczenieRaspberry(Szkielet):
 
     # Trzeba dodać przesył plików potrzebnych do BE
     def backEndIntegration(self, ip, login, password, check):
-        #backendObject = BE.RaspberryPi(ipRpi, loginRpi, passwordRpi)
-        #self.response = backendObject.connect()        #to git
-        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "LOGIN": login, "PASSWORD": password, "PATH": ""}
+        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "LOGIN": login, "PASSWORD": password}
         checkingJS = jsc.FatherJSON("configJSON", dataJSON)
         checkingJS.writeJSON()
         self.close()
-        myMenu = MenuRaspberry(ip, login, password, "")
+        myMenu = MenuRaspberry(ip, login, password)
         myMenu.gui(None)
 
 
@@ -196,11 +194,11 @@ class ColorMenu(Szkielet):
 
 # Klasa odpowiedzialna za główne menu RPI
 class MenuRaspberry(Szkielet):
-    def __init__(self, ip, login, password, path):
+    def __init__(self, ip, login, password):
         self.iteracja = 1
         self.angle = 0
         self.colorCutter = ""
-        self.ip, self.login, self.password, self.path = ip, login, password, path
+        self.ip, self.login, self.password = ip, login, password
         self.lightsList = [0, 0, 0, 0]
         self.rgb = [0, 0, 0]
         pole = (350, 480)
@@ -218,7 +216,7 @@ class MenuRaspberry(Szkielet):
                     [sg.InputCombo(self.toolList, size=(32, 1), key="-COMBO-", readonly=True),
                      sg.Button("Potwierdź", size=(8, 1), key="-CONFIRM-", disabled=False)],
                     [sg.Text("Wybierz ścieżkę zapisu pliku na komputerze")],
-                    [sg.Input(key="-FOLDER-", default_text=self.path, enable_events=True, **self.textStyle[1]),
+                    [sg.Input(key="-FOLDER-", enable_events=True, **self.textStyle[1]),
                      sg.FolderBrowse(button_text="Wybierz", key="-BROWSE-")],
                     [sg.Text("Określ liczbę zdjęć do wykonania")],
                     [sg.Input(key="-ANGLE-", enable_events=True, size=(34, 1)),
@@ -269,18 +267,15 @@ class MenuRaspberry(Szkielet):
             for light in ['-XL-', '-YL-', '-XP-', '-YP-']:
                 self.lightsList.append(values[light])
             print(self.lightsList)
-            createJson = jsc.LightsJSON(self.lightsList)
+            createJson = jsc.LightsJSON({"Lights": self.lightsList})
             path = createJson.writeJSON()
             # Wysyłanie do RPI JSONA z informacjami o ustawionym świetle + programu odpalającego światło, następie
             # Odpalenie światełek
-            #send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            #send.sendIn(f"{path}\\lightsJSON.json", '/home/pi/Lights/lightsJSON.json')
-            print('przeslano json')
-            #send2 = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            #send2.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
-            print('przeslano lights')
-            #on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            #on.start("sudo python3 /home/pi/Lights/lights.py")
+            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            send.sendIn(f"{path}\\lightsAndIterationJSON.json", '/home/pi/Lights/lightsAndIterationJSON.json')
+            send.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
+            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start("sudo python3 /home/pi/Lights/lights.py")
 
         # Przycisk odpowiadający za podgląd zdjęć
         def showPicture(_):
@@ -303,38 +298,68 @@ class MenuRaspberry(Szkielet):
         # Potwierdzenie wyboru ilosci zdjec
         def angleConfirm(values):
             try:
-                self.entered_angle = int(values["-ANGLE-"])
-                print(self.entered_angle)
+                self.enteredAngle = int(values["-ANGLE-"])
                 # Przeliczanie ilości zdjęć na kąt obrotu frezu
-                self.angle = round(360 / self.entered_angle, 3)
-                # Update the text of the element with key "-ANGLEOUTPUT-"
-                self["-ANGLEOUTPUT-"].update(f"Aktualny kąt obrotu ostrza: {self.angle} stopni")
+                angle = round(360 / self.enteredAngle, 3)
+                self["-ANGLEOUTPUT-"].update(f"Aktualny kąt obrotu ostrza: {angle} stopni")
             except ValueError:
                 sg.popup_error('Błędna wartość')
 
         # Przycisk odpowiadający za wykonywanie zdjęć
         def picture(_):
             # noinspection PyUnresolvedReferences
-            pictureName = f'{self.txt}'   #Nazwa folderu z dzisiejsza data
+            pictureName = f'{self.txt}'   #Nazwa folderu z nazwą narzędzia
+            photoFolder = jsc.LightsJSON({"Folder": f'/home/pi/{pictureName}'})
+            photoFolder.appendJSON()
             if self.checkIfNewTool == 0:        # Jeżeli nie jest to nowe narzędzie to dodaje do listy toolsjson
                 # noinspection PyUnresolvedReferences
                 appendToJSON = jsc.AppendJSON(self.txt.upper(), self.lightsList, self.rgb)
                 appendToJSON.readJSON()
+                print('jestem')
+                # noinspection PyUnresolvedReferences
+                photoIteration = jsc.LightsJSON({"LiczbaZdjec": self.enteredAngle})
+                photoIteration.appendJSON()
+
             else:           #jeżeli nowe narzędzie to tworzy nowy key w jsonie
+                try:
+                    # noinspection PyUnresolvedReferences
+                    photoIteration = jsc.LightsJSON({"LiczbaZdjec": self.enteredAngle})
+                    photoIteration.appendJSON()
+                except FileNotFoundError:
+                    sg.popup_error("Plik JSON nie istnieje.")
+                except Exception as e:
+                    # noinspection PyUnresolvedReferences
+                    if self.enteredAngle is None:
+                        sg.popup_error(f"Wprowadź liczbę zdjęć")
+                    else:
+                        pass
                 self.checkIfNewTool -= 1        # Unika się nadpisywania tylko przechodzi do appendu
                 jsonLights = jsc.ToolsJSON()
                 # noinspection PyUnresolvedReferences
                 jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb],
                                      name=self.txt, iteracja=self.iteracja, path=self.folderPath)
-            #on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            #on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
-            # noinspection PyUnresolvedReferences
-            #BE.createFolder(f'{self.folderPath}\\testowanazwa')
-            #photo = BE.Photo(check["IP"], check["LOGIN"], check["PASSWORD"])
-            # noinspection PyUnresolvedReferences
-            #photo.takePhoto(self.entered_angle, f'/home/pi/{pictureName}')      #Do zmiany
-            # noinspection PyUnresolvedReferences
-            #photo.sendOut(f'{self.folderPath}\\testowanazwa')
+                print('jestem123')
+                # noinspection PyUnresolvedReferences
+                BE.createFolder(rf"{self.folderPath}\{self.txt}")
+
+            path = photoIteration.returnPath()
+            print('jestem3')
+            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
+            print('dupa')
+            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
+            print('dupa1')
+            # tutaj sie sypie
+            send.sendIn(f"{path}\\lightsAndIterationJSON.json", '/home/pi/Lights/lightsAndIterationJSON.json')
+            send.sendIn(f"{path}\\Camera.py", '/home/pi/Lights/Camera.py')
+            print('dupa2')
+            # photo = BE.Photo.takePhoto()
+            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
+            on.start("sudo python3 /home/pi/Lights/Camera.py")
+            #noinspection PyUnresolvedReferences
+            #photo.sendOut(rf'{self.folderPath}\{self.txt}')         #dodać robienie zdjęc
+
+            #Dodać aby do folderu roibło zdjęcia
 
         # przycisk potwierdzający wybór narzędzia
         def confirm(values):
@@ -388,7 +413,7 @@ class PictureMenu(Szkielet):
         keyRead = jsc.FatherJSON("toolsJSON", None)
         keyPath = keyRead.readJSON()
         self.txt = txt
-        self.photoFolder = keyPath[str(self.txt)]["PATH"]
+        self.photoFolder = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
         self.lightSlider = keyPath[str(self.txt)]["ITERACJA"]
         self.pictureIndex = 1
         self.pictureLight = 1
@@ -412,7 +437,6 @@ class PictureMenu(Szkielet):
                                orientation='horizontal', key='-SL-')]
                     )
 
-
     def run(self, mapa, basicEvent = None):
         def pictureSlider(values):
             my_dict = values
@@ -431,7 +455,6 @@ class PictureMenu(Szkielet):
 
         super().run(map)
 
-
     def updatePicture(self):
         photoPath = os.path.join(self.photoFolder, f'zdjecie{self.pictureIndex}.{self.pictureLight}.png')
         original_image = Image.open(photoPath)
@@ -442,10 +465,8 @@ class PictureMenu(Szkielet):
         pass
 
 def main():
-    # myGui = PolaczenieRaspberry()
-    # myGui.checkConfiguration()
-    run = MenuRaspberry('c', 'c', 'c', 'c')
-    run.gui()
+    myGui = PolaczenieRaspberry()
+    myGui.checkConfiguration()
 
 if __name__ == "__main__":
     main()
