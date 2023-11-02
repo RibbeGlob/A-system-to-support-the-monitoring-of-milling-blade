@@ -2,6 +2,8 @@
 from rpi_ws281x import Adafruit_NeoPixel, Color
 import json
 import os
+import time
+import picamera
 
 LED_COUNT = 32  # Number of LED pixels.
 LED_PIN = 18  # GPIO pin connected to the pixels (must support PWM!).
@@ -50,14 +52,14 @@ def iteration(wiersz, iteracjawiersza):
     return listOfLights
 
 
-x = readJSON("lightsJSON") #do zmiany na rpi
+x = readJSON("lightsJSON")
 lightsNumber = iteration(int(x[0]), int(x[1]))
 
-while 1:
-    strip.begin()
-    for i in lightsNumber:
-        strip.setPixelColor(i, Color(120, 120, 120))
-        strip.show()
+strip.begin()
+for i in lightsNumber:
+    strip.setPixelColor(i, Color(120, 120, 120))
+    strip.show()
+
 
 
 
