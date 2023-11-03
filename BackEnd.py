@@ -2,6 +2,7 @@ import os
 import paramiko
 import PySimpleGUI as sg
 import time
+import JSON.JSONscrypt as jsc
 
 # za jednym sendem wszyscko i wyjebac connecty/ wysyłać tylko jsony do rpi/lights i zdjecie do jednego wjebac i chuj
 def measure_time(func):
@@ -67,51 +68,30 @@ class Sending(Connection):
         except paramiko.SSHException as ssh_ex:
             sg.popup_error(f"Błąd połączenia SSH: {ssh_ex}")
 
-
-# Klasa robiąca zdjęcia + przesył plików na PC
-class Photo(Connection):
-    @measure_time
-    def sendOut(self, localPath):
+    def sendOut(self, localPath, iteration, folderPath, photoNumber):
         self.connect()
-        self.localPath = localPath
         try:
             sftp = self.client.open_sftp()
-            for i in range(20):
-                remote_path = f'{self.folderPath}/zdjecie{i}.jpg'
-                local_path = f"{self.localPath}\\test{i}.jpg"
+            for i in range(iteration):
+                remote_path = f'{folderPath}/zdjecie_{i+1}.jpg'
+                print(remote_path)
+                local_path = f"{localPath}/zdjecie_{i+1}.jpg"
+                print(local_path)
                 sftp.get(remote_path, local_path)
-                print(f'Pobrano zdjecie z Raspberry Pi i zapisano je jako {local_path}')
                 i += 1
         except Exception as e:
             print(f'Wystąpił błąd: {str(e)}')
 
-    @measure_time
-    def takePhoto(self, x, folderPath):
-        self.folderPath = folderPath
-        try:
-            self.connect()
-            i = 0
-            while i <= 0:  # Zmieniony warunek
-                self.photoPath = f"{self.folderPath}" + f'/zdjecie{i}.jpg'
-                print(self.photoPath)
-                command = f'raspistill -n -o {self.photoPath} -t 1'
-                i += 1
-                stdin, stdout, stderr = self.client.exec_command(command)
-                stdin.channel.recv_exit_status()        #czeka na zakonczenie komendy
-        except paramiko.SSHException as e:
-            sg.Popup('Błąd SSH', f'Wystąpił błąd SSH: {str(e)}')
-        finally:
-            self.client.close()
 
-
-# klasa do wysyłania komend do wykonania na RPI (włączenie świateł na ten moment)
+# klasa do wysyłania komend do wykonania na RPI
 @measure_time
 class Commands(Connection):
     def start(self, *args):
         self.connect()
         commands = args[0]
-        self.client.exec_command(commands)
-
+        stdin, stdout, stderr = self.client.exec_command(commands)
+        stdin.close()
+        return stdout
 
 # Wybranie koloru oraz automatyczny kontrast
 def changingNameToRGB(kolor):
