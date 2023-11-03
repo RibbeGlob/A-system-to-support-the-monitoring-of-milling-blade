@@ -13,7 +13,7 @@ class FatherJSON:
     def writeJSON(self):
         try:
             with open(f"{self.jsonPath}\\{self.jsonFile}.json", "w") as fileJSON:
-                json.dump(self.data, fileJSON, indent=2)
+                json.dump(self.data, fileJSON, indent=1)
         except FileNotFoundError:
             sg.popup_error("Error plik JSON nie istnieje")
         except json.decoder.JSONDecodeError:
@@ -42,8 +42,8 @@ class AppendJSON(FatherJSON):
         super().__init__("toolsJSON", None)
 
     def writeJSON(self):
-        self.data[self.keyName]["USTAWIENIE"].append([self.configuration])
-        self.data[self.keyName]["KOLOR"].append([self.color])
+        self.data[self.keyName]["USTAWIENIE"].extend(self.configuration)
+        self.data[self.keyName]["KOLOR"].extend(self.color)
         increment = lambda: self.data[self.keyName].update(ITERACJA=self.data[self.keyName]["ITERACJA"] + 1)
         increment()
         super().writeJSON()
