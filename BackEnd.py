@@ -73,9 +73,9 @@ class Sending(Connection):
         try:
             sftp = self.client.open_sftp()
             for i in range(iteration):
-                remote_path = f'{folderPath}/zdjecie_{i+1}.jpg'
+                remote_path = f'{folderPath}/{photoNumber}_zdjecie_{i+1}.jpg'
                 print(remote_path)
-                local_path = f"{localPath}/zdjecie_{i+1}.jpg"
+                local_path = f"{localPath}/{photoNumber}_zdjecie_{i+1}.jpg"
                 print(local_path)
                 sftp.get(remote_path, local_path)
                 i += 1

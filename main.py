@@ -3,11 +3,12 @@ from abc import ABC, abstractmethod
 import BackEnd as BE
 import JSON.JSONscrypt as jsc
 import json
-from PIL import Image, ImageTk
+from PIL import Image
 import os
-import time
-# Dodać create folder na pc w checkowaniu ilości zdjęć  + zaimplementować robienie zdjęć
-# DOdać odblokowanie przycisku po confirmie angle + wjebac do jednego jsona
+import io
+
+# Dodać ścieżke zapisu z jsona a jak nowy to brak + wywalić connecty + optymalizacja przez metody bo sie kod powtarza
+
 
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
@@ -315,10 +316,10 @@ class MenuRaspberry(Szkielet):
             if self.checkIfNewTool == 0:        # Jeżeli nie jest to nowe narzędzie to dodaje do listy toolsjson
                 # noinspection PyUnresolvedReferences
                 appendToJSON = jsc.AppendJSON(self.txt.upper(), [self.lightsList], [self.rgb])
-                appendToJSON.readJSON()
+                self.iteracja = appendToJSON.readJSON()
                 # noinspection PyUnresolvedReferences
                 photoIteration = jsc.LightsJSON({"LiczbaZdjec": self.enteredAngle, "Iteracja": self.iteracja})
-                photoIteration.appendJSON()
+                photoIteration.appendJSON()         # Json wysyłany na RPI
 
             else:           #jeżeli nowe narzędzie to tworzy nowy key w jsonie
                 try:
@@ -347,15 +348,13 @@ class MenuRaspberry(Szkielet):
             send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
             send.sendIn(f"{path}\\lightsAndIterationJSON.json", '/home/pi/Lights/lightsAndIterationJSON.json')
             send.sendIn(f"{path}\\Camera.py", '/home/pi/Lights/Camera.py')
-            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
             stdout = on.start("sudo python3 /home/pi/Lights/Camera.py")
-            while not stdout.channel.exit_status_ready():
+            while not stdout.channel.exit_status_ready():       # Czekanie aż się wykonają zdjęcia
                 pass
-            sendToComputer = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
             read = jsc.FatherJSON("toolsJSON", None)
-            data = read.readJSON()
-            hereFolder = data[self.txt.upper()].get("PATH", "")
-            sendToComputer.sendOut(hereFolder+f"/{self.txt}", self.enteredAngle,
+            # data = read.readJSON()
+            hereFolder = read.readJSON()[self.txt.upper()].get("PATH", "")
+            send.sendOut(hereFolder+f"/{self.txt}", self.enteredAngle,
                                    f'/home/pi/{pictureName}', self.iteracja)
 
 
@@ -370,7 +369,11 @@ class MenuRaspberry(Szkielet):
                 self["-COMBO-"](self.txt)
                 self["-PICTURE-"].update(disabled=False)
                 self["-SHOWPICTURE-"].update(disabled=False)
-                self["-FOLDER-"].update(value=r"C:\Users\gerfr\OneDrive\Pulpit\x\testowanazwa")
+                # Dodać na czytanie ścieżki
+                try:
+                    self["-FOLDER-"].update(value=self.actually[self.txt.upper()]["PATH"])
+                except KeyError:
+                    pass
             else:
                 sg.popup_error("Zdefiniuj narzędzie")
 
@@ -411,25 +414,52 @@ class PictureMenu(Szkielet):
     def __init__(self, txt):
         keyRead = jsc.FatherJSON("toolsJSON", None)
         keyPath = keyRead.readJSON()
-        self.txt = txt
+        self.txt = txt.upper()
+        print(f"{keyPath[str(self.txt)]['PATH']}/{self.txt}")
         self.photoFolder = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
+        self.photoFolder = self.photoFolder.replace('/', '\\')
         self.lightSlider = keyPath[str(self.txt)]["ITERACJA"]
         self.pictureIndex = 1
         self.pictureLight = 1
+        self.max_number = 1
         pole = (700, 500)
         textLength = [(22, 1), (36, 1)]
-        # Sprawdzenie ile jest zdjęć (kończących się na 1.png)
-        if os.path.exists(self.photoFolder) and os.path.isdir(self.photoFolder):
-            self.matching_files = [file for file in os.listdir(self.photoFolder) if file.endswith(f"1.png")]
-        self.defaultPhoto = os.path.join(self.photoFolder, "zdjecie1.1.png")
+        self.folderMethod()
+        self.defaultPhoto = f"{self.photoFolder}\\1_zdjecie_1.png"
+        self.resized_image = self.resize_image(self.defaultPhoto, (100, 100))
         super().__init__(pole, textLength)
+
+    def folderMethod(self):
+        # Konwersja jpg na png
+        for filename in os.listdir(self.photoFolder):
+            if filename.endswith(".jpg"):
+                jpg_path = os.path.join(self.photoFolder, filename)
+                png_path = os.path.splitext(jpg_path)[0] + ".png"
+                try:
+                    jpg_image = Image.open(jpg_path)
+                    jpg_image.save(png_path, "PNG")
+                    jpg_image.close()
+                    os.remove(jpg_path)
+                except Exception as e:
+                    print(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
+
+        # Liczenie plików PNG
+        if os.path.exists(self.photoFolder) and os.path.isdir(self.photoFolder):
+            for filename in os.listdir(self.photoFolder):
+                if filename.endswith(".png"):
+                    try:
+                        number = int(filename[len("1_zdjecie_"):filename.find(".png")])
+                        self.max_number = max(self.max_number, number)
+                    except ValueError:
+                        print(f"Błąd podczas przetwarzania pliku {filename}: Nie można odczytać numeru.")
+
 
     def gui(self, *args):
         i = 0
         super().gui([sg.Text(f"Aktualnie wyświetlane narzędzie {self.txt}")],
-                    [sg.Image(self.defaultPhoto, key="cutterGuardingGauge")],
+                    [sg.Image(self.resized_image, key="cutterGuardingGauge")],
                     [sg.Text(f"Zmiana kąta ostrza o {i}")],
-                    [sg.Slider(range=(1, len(self.matching_files)), default_value=1, expand_x=True, enable_events=True,
+                    [sg.Slider(range=(1, self.max_number), default_value=1, expand_x=True, enable_events=True,
                                orientation='horizontal', key='-SP-')],
                     [sg.Text("Zmiana oświetlenia ostrza")],
                     [sg.Slider(range=(1, self.lightSlider), default_value=1, expand_x=True, enable_events=True,
@@ -437,14 +467,13 @@ class PictureMenu(Szkielet):
                     )
 
     def run(self, mapa, basicEvent = None):
+
         def pictureSlider(values):
-            my_dict = values
-            self.pictureIndex = int(my_dict['-SP-'])
+            self.pictureIndex = int(values['-SP-'])
             self.updatePicture()
 
         def lightSlider(values):
-            my_dict = values
-            self.pictureLight = int(my_dict['-SL-'])
+            self.pictureLight = int(values['-SL-'])
             self.updatePicture()
 
         map = {
@@ -452,12 +481,21 @@ class PictureMenu(Szkielet):
             '-SL-': lightSlider
         }
 
+
         super().run(map)
 
+    # Metoda do zmniejszania png
+    def resize_image(self, image_path, size):
+        original_image = Image.open(image_path)
+        resized_image = original_image.resize(size, Image.LANCZOS)
+        bio = io.BytesIO()
+        resized_image.save(bio, format="PNG")
+        return bio.getvalue()
+
+    # Update pokazywanych zdjęć
     def updatePicture(self):
-        photoPath = os.path.join(self.photoFolder, f'zdjecie{self.pictureIndex}.{self.pictureLight}.png')
-        original_image = Image.open(photoPath)
-        photo_image = ImageTk.PhotoImage(original_image)
+        photoPath = os.path.join(self.photoFolder, f'{self.pictureLight}_zdjecie_{self.pictureIndex}.png')
+        photo_image = self.resize_image(photoPath, (100, 100))
         self._window_that_exited["cutterGuardingGauge"].update(data=photo_image)
 
     def backEndIntegration(self, kolor):
