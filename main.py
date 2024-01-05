@@ -6,14 +6,15 @@ import json
 from PIL import Image
 import os
 import io
-
-# Dodać ścieżke zapisu z jsona a jak nowy to brak + wywalić connecty + optymalizacja przez metody bo sie kod powtarza
-
+# Na samym początku sprawdzić czy wszystkie pliki przesłane         dodać jpga
+# Zoptymalizować
+# Dodać ilość zdjęć  (6,3) ilośc przycisków zależna od ilości zdjęć
+# dodaj thread do zmian miejsca
 
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
         # Nazwa okna + rozmiar okna
-        super().__init__(title="cutterGuardingGauge", size=pole)
+        super().__init__(title="cutterGuardingGauge", size=pole, location=(0,0))
         # Lista, styli tekstowych (argv[0] zawsze przyjmuje jako argument)
         self.textStyle = []
         self.zamkniecie = False
@@ -222,7 +223,7 @@ class MenuRaspberry(Szkielet):
                      sg.FolderBrowse(button_text="Wybierz", key="-BROWSE-")],
                     [sg.Text("Określ liczbę zdjęć do wykonania")],
                     [sg.Input(key="-ANGLE-", enable_events=True, size=(34, 1)),
-                     sg.Button("Potwierdź", size=(8, 1), key="-ANGLECONFIRM-")],
+                     sg.Button("Potwierdź", size=(8, 1), key="-ANGLECONFIRM-", disabled=False)],
                     [sg.Text(f"Aktualny kąt obrotu ostrza: {self.angle} stopni",
                              **self.textStyle[1], key="-ANGLEOUTPUT-")],
                     [sg.Frame('Lewe oświetlenie', [
@@ -234,7 +235,7 @@ class MenuRaspberry(Szkielet):
                           sg.Slider(range=(-4, 4), size=(4, 16), orientation="v", default_value=0, key='-YP-')]
                      ])
                      ],
-                    [sg.Button("Wykonaj zdjęcie", size=(8, 5), key="-PICTURE-", disabled = True),
+                    [sg.Button("Wykonaj zdjęcie", size=(8, 5), key="-PICTURE-", disabled=True),
                      sg.Button("Ustaw światło", size=(8, 5), key="-LIGHTBUTTON-"),
                      sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(8, 5), key="-COLORBUTTON-"),
                      sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-", disabled=True)],
@@ -356,6 +357,7 @@ class MenuRaspberry(Szkielet):
             hereFolder = read.readJSON()[self.txt.upper()].get("PATH", "")
             send.sendOut(hereFolder+f"/{self.txt}", self.enteredAngle,
                                    f'/home/pi/{pictureName}', self.iteracja)
+            self["-ANGLECONFIRM-"].update(disabled=True)
 
 
         # przycisk potwierdzający wybór narzędzia
@@ -372,8 +374,14 @@ class MenuRaspberry(Szkielet):
                 # Dodać na czytanie ścieżki
                 try:
                     self["-FOLDER-"].update(value=self.actually[self.txt.upper()]["PATH"])
+                    result = "ITERACJA" in self.actually[self.txt.upper()] and \
+                             self.actually[self.txt.upper()]["ITERACJA"] is not None
+                    self["-ANGLECONFIRM-"].update(disabled=result)
+                    self["-ANGLE-"].update(self.actually[self.txt.upper()]["ITERACJA"])
+                    self.enteredAngle = self.actually[self.txt.upper()]["ITERACJA"]
                 except KeyError:
                     pass
+
             else:
                 sg.popup_error("Zdefiniuj narzędzie")
 
@@ -422,11 +430,11 @@ class PictureMenu(Szkielet):
         self.pictureIndex = 1
         self.pictureLight = 1
         self.max_number = 1
-        pole = (700, 500)
+        pole = (1530, 810)
         textLength = [(22, 1), (36, 1)]
         self.folderMethod()
         self.defaultPhoto = f"{self.photoFolder}\\1_zdjecie_1.png"
-        self.resized_image = self.resize_image(self.defaultPhoto, (100, 100))
+        self.resized_image = self.resize_image(self.defaultPhoto, (850, 620))
         super().__init__(pole, textLength)
 
     def folderMethod(self):
@@ -453,17 +461,15 @@ class PictureMenu(Szkielet):
                     except ValueError:
                         print(f"Błąd podczas przetwarzania pliku {filename}: Nie można odczytać numeru.")
 
-
     def gui(self, *args):
         i = 0
         super().gui([sg.Text(f"Aktualnie wyświetlane narzędzie {self.txt}")],
                     [sg.Image(self.resized_image, key="cutterGuardingGauge")],
-                    [sg.Text(f"Zmiana kąta ostrza o {i}")],
-                    [sg.Slider(range=(1, self.max_number), default_value=1, expand_x=True, enable_events=True,
-                               orientation='horizontal', key='-SP-')],
-                    [sg.Text("Zmiana oświetlenia ostrza")],
-                    [sg.Slider(range=(1, self.lightSlider), default_value=1, expand_x=True, enable_events=True,
-                               orientation='horizontal', key='-SL-')]
+                     [sg.Slider(range=(1, self.max_number), default_value=1,
+                                           orientation='h',  key='-SP-', enable_events=True,size=(100,20))],
+                        [sg.Slider(range=(1, self.lightSlider), default_value=1,
+                                              orientation='h', key='-SL-', enable_events=True,size=(100,20))],
+
                     )
 
     def run(self, mapa, basicEvent = None):
@@ -478,7 +484,8 @@ class PictureMenu(Szkielet):
 
         map = {
             '-SP-': pictureSlider,
-            '-SL-': lightSlider
+            '-SL-': lightSlider,
+
         }
 
 
@@ -487,16 +494,19 @@ class PictureMenu(Szkielet):
     # Metoda do zmniejszania png
     def resize_image(self, image_path, size):
         original_image = Image.open(image_path)
-        resized_image = original_image.resize(size, Image.LANCZOS)
+        original_image.thumbnail(size, Image.LANCZOS)
         bio = io.BytesIO()
-        resized_image.save(bio, format="PNG")
+        original_image.save(bio, format="PNG")
         return bio.getvalue()
 
     # Update pokazywanych zdjęć
     def updatePicture(self):
         photoPath = os.path.join(self.photoFolder, f'{self.pictureLight}_zdjecie_{self.pictureIndex}.png')
-        photo_image = self.resize_image(photoPath, (100, 100))
+        photo_image = self.resize_image(photoPath, (850, 620))
         self._window_that_exited["cutterGuardingGauge"].update(data=photo_image)
+
+    def updateButtonPicture(self):
+        pass
 
     def backEndIntegration(self, kolor):
         pass
