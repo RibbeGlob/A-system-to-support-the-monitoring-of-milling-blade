@@ -2,7 +2,6 @@
  "WERSJA": "G1.0",
  "ZALOGOWANY": true,
  "IP": "raspberryfrez",
- "LOGIN": "pi",
- "PASSWORD": "student",
- "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x/testowanazwa"
+ "PORT": 12347,
+ "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x"
 }

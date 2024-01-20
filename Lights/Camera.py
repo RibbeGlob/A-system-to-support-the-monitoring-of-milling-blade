@@ -1,7 +1,7 @@
-import picamera
 import json
 import os
-# dodać folder zapisu
+import time
+from picamera2 import Picamera2, Preview
 
 def readJSON():
     jsonFile = 'lightsAndIterationJSON'
@@ -9,21 +9,23 @@ def readJSON():
     jsonPath = os.path.join(path)
     with open(f"{jsonPath}/{jsonFile}.json", "r") as fileJSON:
         data = json.load(fileJSON)
-    listData = [data["LiczbaZdjec"], data["Folder"]]
+    listData = [data["LiczbaZdjec"], data["Folder"], data["Iteracja"]]
     return(listData)
+
 
 def takePhoto(data):
     try:
-        with picamera.PiCamera() as camera:
-            camera.resolution = (1920, 1080)
-            camera.framerate = 30
-            camera.shutter_speed = 33333# Przykładowa wartość 1/1000 sekundy
-            for i in range(data[0]):
-                camera.capture(f'{data[1]}/zdjecie_{i + 1}.jpg', use_video_port=True)
+        picam2 = Picamera2()
+        preview_config = picam2.create_preview_configuration(main={"size": (800, 600)})
+        picam2.shutter_speed = 2
+        picam2.configure(preview_config)
+        picam2.start()
+        time.sleep(2)
+        for i in range(data[0]):
+            metadata = picam2.capture_file(data[1]+f'/{data[2]}_zdjecie_{i + 1}.png')
+
     except Exception as ex:
         print(f"Błąd podczas robienia zdjęć: {ex}")
 
 data = readJSON()
 takePhoto(data)
-
-

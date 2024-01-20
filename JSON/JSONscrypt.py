@@ -2,7 +2,9 @@ import json
 import os
 import PySimpleGUI as sg
 
+
 class FatherJSON:
+
     def __init__(self, jsonFile, data):
         self.jsonFile = jsonFile
         self.data = data
@@ -52,9 +54,10 @@ class AppendJSON(FatherJSON):
     def readJSON(self):
         self.data = super().readJSON()
         self.writeJSON()
+        return self.data[self.keyName]["ITERACJA"]
 
 
-# JSON do ścieżki
+    # JSON do ścieżki
 class PathJSON(FatherJSON):
     def __init__(self):
         super().__init__("configJSON", None)
@@ -90,7 +93,7 @@ class ToolsJSON(FatherJSON):
     # Pisanie daty do stworzonego pliku JSON (NIE TWORZYMY NOWEGO)
     def writeJSON(self, **kwargs):
         newTool = {"USTAWIENIE": kwargs["settings"], "KOLOR": kwargs["color"],
-                   "ITERACJA": kwargs["iteracja"], "PATH": kwargs["path"]}
+                   "ITERACJA": kwargs["iteracja"], "PATH": kwargs["path"], "ILOSCZDJEC": kwargs["liczba"]}
         self.data = super().readJSON()
         self.data[kwargs["name"].upper()] = newTool
         super().writeJSON()
@@ -121,7 +124,15 @@ class toolsConfirm(FatherJSON):
 
     def deleteJSON(self):
         try:
+            import BackEnd as BE
+            from threading import Thread
             firstKey = next(iter(self.check))
+            checkingConfiguration = FatherJSON("configJSON", None)
+            check = checkingConfiguration.readJSON()
+            send = BE.Sending(check["IP"], check["PORT"])
+            Thread(target=send.send_command, args=(f"sudo rm -r /home/pi/{firstKey}",),
+                   daemon=True).start()
+            print(firstKey)
             self.check.pop(firstKey, None)      #usuniecie klucza
             self.data = self.check
             super().writeJSON()
@@ -158,9 +169,9 @@ class LightsJSON(FatherJSON):
                 fileJSON.truncate()
                 json.dump(existing_data, fileJSON, indent=2)
         except FileNotFoundError:
-            sg.popup_error("Error plik JSON nie istnieje")
+            sg.popup_error(FileNotFoundError)
         except json.decoder.JSONDecodeError:
-            sg.popup_error("Error plik JSON jest uszkodzony")
+            sg.popup_error(json.decoder.JSONDecodeError)
         except Exception as e:
             sg.popup_error(f"Wystąpił nieoczekiwany błąd: {str(e)}")
 

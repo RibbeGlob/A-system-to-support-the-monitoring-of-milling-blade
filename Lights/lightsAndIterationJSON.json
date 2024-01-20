@@ -1,10 +1,11 @@
 {
   "Lights": [
-    0.0,
-    4.0,
-    0.0,
-    0.0
+    -3.0,
+    -4.0,
+    -7.0,
+    4.0
   ],
-  "Folder": "/home/pi/nowyxddd",
-  "LiczbaZdjec": 50
+  "Folder": "/home/pi/FASDDSDS",
+  "LiczbaZdjec": 3,
+  "Iteracja": 1
 }

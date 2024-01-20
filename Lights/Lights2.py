@@ -4,8 +4,10 @@ import json
 import os
 import time
 
+
+# Rozpoczęcie generowania sygnału PWM z wypełnieniem 50%
 LED_COUNT = 32  # Number of LED pixels.
-LED_PIN = 18  # GPIO pin connected to the pixels (must support PWM!).
+LED_PIN = 12  # GPIO pin connected to the pixels (must support PWM!).
 LED_FREQ_HZ = 800000  # LED signal frequency in hertz (usually 800khz)
 LED_DMA = 10  # DMA channel to use for generating signal (try 5)
 LED_BRIGHTNESS = 10  # Set to 0 for darkest and 255 for brightest
@@ -58,10 +60,9 @@ def iteration(wiersz, iteracjawiersza):
 
 
 x = readJSON("lightsAndIterationJSON")
-lightsNumber = iteration(x["Lights"][0], x["Lights"][1])
+lightsNumber = iteration(x["Lights"][2], x["Lights"][3])
 
 strip.begin()
 for i in lightsNumber:
     strip.setPixelColor(i, Color(120, 120, 120))
     strip.show()
-
