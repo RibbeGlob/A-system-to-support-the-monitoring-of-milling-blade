@@ -6,11 +6,11 @@ import json
 from PIL import Image
 import os
 import io
-# Na samym początku sprawdzić czy wszystkie pliki przesłane         dodać jpga
-# Zoptymalizować
-# Dodać ilość zdjęć  (6,3) ilośc przycisków zależna od ilości zdjęć
-# dodaj thread do zmian miejsca
+from threading import Thread
+import time
+from functools import partial
 
+# Klasa odpowiedzialna za szkielet GUI
 class Szkielet(sg.Window, ABC):
     def __init__(self, pole, *argv):
         # Nazwa okna + rozmiar okna
@@ -86,11 +86,12 @@ class GraphicPUP(Szkielet):
     def backEndIntegration(self, *argv):
         pass
 
+
 # Klasa odpowiedzialna za interfejs łączenia się z RPI
 class PolaczenieRaspberry(Szkielet):
     def __init__(self):
         pole = (350, 120)
-        textLength = [(17, 1)]     # pierwszy argv szkieletu
+        textLength = [(17, 1)]
         self.response = None
         super().__init__(pole, textLength)
 
@@ -102,11 +103,12 @@ class PolaczenieRaspberry(Szkielet):
             if check["ZALOGOWANY"] == True:
                 i = 0
                 while i < 3:
-                    # zmiana do sprawdzenia gui
-                    connection = BE.Connection(check["IP"], check["LOGIN"], check["PASSWORD"])
+                    # zmienna do sprawdzenia gui
+                    connection = BE.Connection(check["IP"], check["PORT"])
                     logCheck = connection.connect()   #polaczenie z rpi
+                    connection.client_socket.close()
                     if logCheck == True:
-                        run = MenuRaspberry(check["IP"], check["LOGIN"], check["PASSWORD"])
+                        run = MenuRaspberry(check["IP"], check["PORT"])
                         run.gui()
                         break
                     else:
@@ -117,21 +119,18 @@ class PolaczenieRaspberry(Szkielet):
             else:
                 self.gui()
         except FileNotFoundError:
-            #logi do txt
-            print("Error plik JSON nie istnieje, stwórz folder configJSON w folderze JSON oraz wklej do niego zawartość"
-                  "repairing")
+            sg.popup_error(FileNotFoundError)
             self.gui()
         except json.decoder.JSONDecodeError:
-            print("Plik JSON uszkodzony otwórz plik repairing i wklej zawartość do pliku configJSON")
+            sg.popup_error(json.decoder.JSONDecodeError)
             self.gui()
         except KeyError:
-            print("Plik JSON uszkodzony otwórz plik repairing i wklej zawartość do pliku configJSON")
+            sg.popup_error(KeyError)
             self.gui()
 
     def gui(self, *args):
         super().gui([sg.Text("Adres IP Raspberry Pi: ", **self.textStyle[0]), sg.Input(key='-IP-', pad=(1, 1))],
-            [sg.Text("Nazwa użytkownika: ", **self.textStyle[0]), sg.InputText(key='-LOGIN-', pad=(1, 1))],
-            [sg.Text("Hasło: ", **self.textStyle[0]), sg.InputText(key='-HASLO-', password_char='*', pad=(1, 1))],
+            [sg.Text("Port: ", **self.textStyle[0]), sg.InputText(key='-PORT-', pad=(1, 1))],
             [sg.Text("Zapamiętaj mnie", **self.textStyle[0]), sg.Checkbox("Tak", pad=(0, 1), key='-CX-'),
              sg.Button("Połącz", size=20, pad=((20, 0), (0, 0)), key='-BT-')])
 
@@ -142,30 +141,29 @@ class PolaczenieRaspberry(Szkielet):
         super().run(map)
 
     def connectButtonClicked(self, values):
-        password = values['-HASLO-']
-        login = values['-LOGIN-']
+        login = values['-PORT-']
         ip = values['-IP-']
         if values['-CX-']:
-            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, password, True))   #wywolanie BEI
+            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, True))   #wywolanie BEI
         else:
-            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, password, False))
+            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, False))
 
-    # Trzeba dodać przesył plików potrzebnych do BE
-    def backEndIntegration(self, ip, login, password, check):
-        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "LOGIN": login, "PASSWORD": password}
+    def backEndIntegration(self, ip, port, check):
+        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "PORT": port.int()}
         checkingJS = jsc.FatherJSON("configJSON", dataJSON)
         checkingJS.writeJSON()
         self.close()
-        myMenu = MenuRaspberry(ip, login, password)
+        myMenu = MenuRaspberry(ip, port)
         myMenu.gui(None)
 
 
+# Klasa odpowiedzialna za menu wyboru kolorów
 class ColorMenu(Szkielet):
     def __init__(self):
         pole = (150, 150)
         textLength = [(22, 1), (36, 1)]
         self.selectedColor = None
-        self.colors = ['Czarny', 'Cyjan', 'Magenta', 'Żółty', 'Niebieski', 'Czerwony']   #trzeba dodac kontrast
+        self.colors = ['Czarny', 'Cyjan', 'Magenta', 'Żółty', 'Niebieski', 'Czerwony']
         super().__init__(pole, textLength)
 
     def gui(self, *args):
@@ -197,17 +195,17 @@ class ColorMenu(Szkielet):
 
 # Klasa odpowiedzialna za główne menu RPI
 class MenuRaspberry(Szkielet):
-    def __init__(self, ip, login, password):
+    def __init__(self, ip, port):
         self.iteracja = 1
         self.angle = 0
         self.colorCutter = ""
-        self.ip, self.login, self.password = ip, login, password
+        self.ip, self.port = ip, port
         self.lightsList = [0, 0, 0, 0]
         self.rgb = [0, 0, 0]
         pole = (350, 480)
         textLength = [(22, 1), (36, 1)]
-        xd = jsc.ToolsJSON()
-        self.toolList = xd.readJSON()
+        readJSONFile = jsc.ToolsJSON()
+        self.toolList = readJSONFile.readJSON()
         self.checkIfNewTool = 0
         super().__init__(pole, textLength)
 
@@ -265,6 +263,7 @@ class MenuRaspberry(Szkielet):
             path = jsc.PathJSON()
             path.writeJSON(self.folderPath)
 
+        # Przycisk odpowiedzialny za oświetlenie
         def lights(values):
             self.lightsList.clear()
             for light in ['-XL-', '-YL-', '-XP-', '-YP-']:
@@ -272,13 +271,24 @@ class MenuRaspberry(Szkielet):
             print(self.lightsList)
             createJson = jsc.LightsJSON({"Lights": self.lightsList})
             path = createJson.writeJSON()
-            # Wysyłanie do RPI JSONA z informacjami o ustawionym świetle + programu odpalającego światło, następie
-            # Odpalenie światełek
-            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            send.sendIn(f"{path}\\lightsAndIterationJSON.json", '/home/pi/Lights/lightsAndIterationJSON.json')
-            send.sendIn(f"{path}\\lights.py", '/home/pi/Lights/lights.py')
-            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            on.start("sudo python3 /home/pi/Lights/lights.py")
+
+            # Połączenie z socketem
+            send = BE.Sending(check["IP"], check["PORT"])
+            files = ["lightsAndIterationJSON.json", "lights.py", "lights2.py"]
+
+            for file in files:
+                thread = Thread(target=send.send_file, args=(f"{path}\\{file}",), daemon=True)
+                thread.start()
+                thread.join()
+                time.sleep(0.5)
+
+            commands = ["sudo python3 /home/pi/received_files/lights.py",
+                        "sudo python3 /home/pi/received_files/lights2.py"]
+
+            for cmd in commands:
+                Thread(target=send.send_command, args=(cmd,), daemon=True).start()
+                time.sleep(0.5)
+
 
         # Przycisk odpowiadający za podgląd zdjęć
         def showPicture(_):
@@ -312,7 +322,7 @@ class MenuRaspberry(Szkielet):
         def picture(_):
             # noinspection PyUnresolvedReferences
             pictureName = f'{self.txt}'   #Nazwa folderu z nazwą narzędzia
-            photoFolder = jsc.LightsJSON({"Folder": f'/home/pi/{pictureName}'})
+            photoFolder = jsc.LightsJSON({"Folder": f'/home/pi/{pictureName.upper()}'})
             photoFolder.appendJSON()
             if self.checkIfNewTool == 0:        # Jeżeli nie jest to nowe narzędzie to dodaje do listy toolsjson
                 # noinspection PyUnresolvedReferences
@@ -328,7 +338,7 @@ class MenuRaspberry(Szkielet):
                     photoIteration = jsc.LightsJSON({"LiczbaZdjec": self.enteredAngle, "Iteracja": self.iteracja})
                     photoIteration.appendJSON()
                 except FileNotFoundError:
-                    sg.popup_error("Plik JSON nie istnieje.")
+                    sg.popup_error(FileNotFoundError)
                 except Exception as e:
                     # noinspection PyUnresolvedReferences
                     if self.enteredAngle is None:
@@ -339,24 +349,38 @@ class MenuRaspberry(Szkielet):
                 jsonLights = jsc.ToolsJSON()
                 # noinspection PyUnresolvedReferences
                 jsonLights.writeJSON(settings=[self.lightsList], color=[self.rgb],
-                                     name=self.txt, iteracja=self.iteracja, path=self.folderPath)
+                                     name=self.txt, iteracja=self.iteracja, path=self.folderPath, liczba=self.enteredAngle)
                 # noinspection PyUnresolvedReferences
                 BE.createFolder(rf"{self.folderPath}\{self.txt}")
 
+            # noinspection PyUnresolvedReferences
             path = photoIteration.returnPath()
-            on = BE.Commands(check["IP"], check["LOGIN"], check["PASSWORD"])
-            on.start(f'mkdir /home/pi/{pictureName}')       #Tworzenie folderu na RPI
-            send = BE.Sending(check["IP"], check["LOGIN"], check["PASSWORD"])
-            send.sendIn(f"{path}\\lightsAndIterationJSON.json", '/home/pi/Lights/lightsAndIterationJSON.json')
-            send.sendIn(f"{path}\\Camera.py", '/home/pi/Lights/Camera.py')
-            stdout = on.start("sudo python3 /home/pi/Lights/Camera.py")
-            while not stdout.channel.exit_status_ready():       # Czekanie aż się wykonają zdjęcia
-                pass
+            send = BE.Sending(check["IP"], check["PORT"])
+
+            def send_file_and_sleep(file_path, sleep_time=0.5):
+                thread = Thread(target=send.send_file, args=(file_path,), daemon=True)
+                thread.start()
+                thread.join()
+                time.sleep(sleep_time)
+
+            def send_command_and_sleep(command, sleep_time=0.5):
+                thread = Thread(target=send.send_command, args=(command,), daemon=True)
+                thread.start()
+                thread.join()
+                time.sleep(sleep_time)
+
+            send_file_and_sleep(f"{path}\\lightsAndIterationJSON.json")
+            send_command_and_sleep(f'mkdir /home/pi/{pictureName.upper()}')
+            send_file_and_sleep(f"{path}\\Camera.py")
+            send_command_and_sleep("sudo python3 /home/pi/received_files/Camera.py")
+
             read = jsc.FatherJSON("toolsJSON", None)
-            # data = read.readJSON()
+            # noinspection PyUnresolvedReferences
             hereFolder = read.readJSON()[self.txt.upper()].get("PATH", "")
-            send.sendOut(hereFolder+f"/{self.txt}", self.enteredAngle,
-                                   f'/home/pi/{pictureName}', self.iteracja)
+            # noinspection PyUnresolvedReferences
+            Thread(target=send.receive_image, args=(f"{hereFolder}/{self.txt}", self.enteredAngle,
+                                                    f'/home/pi/{pictureName.upper()}', self.iteracja),
+                   daemon=True).start()
             self["-ANGLECONFIRM-"].update(disabled=True)
 
 
@@ -371,14 +395,13 @@ class MenuRaspberry(Szkielet):
                 self["-COMBO-"](self.txt)
                 self["-PICTURE-"].update(disabled=False)
                 self["-SHOWPICTURE-"].update(disabled=False)
-                # Dodać na czytanie ścieżki
                 try:
                     self["-FOLDER-"].update(value=self.actually[self.txt.upper()]["PATH"])
-                    result = "ITERACJA" in self.actually[self.txt.upper()] and \
-                             self.actually[self.txt.upper()]["ITERACJA"] is not None
+                    result = "ILOSCZDJEC" in self.actually[self.txt.upper()] and \
+                             self.actually[self.txt.upper()]["ILOSCZDJEC"] is not None
                     self["-ANGLECONFIRM-"].update(disabled=result)
-                    self["-ANGLE-"].update(self.actually[self.txt.upper()]["ITERACJA"])
-                    self.enteredAngle = self.actually[self.txt.upper()]["ITERACJA"]
+                    self["-ANGLE-"].update(self.actually[self.txt.upper()]["ILOSCZDJEC"])
+                    self.enteredAngle = self.actually[self.txt.upper()]["ILOSCZDJEC"]
                 except KeyError:
                     pass
 
@@ -417,27 +440,55 @@ class MenuRaspberry(Szkielet):
     def backEndIntegration(self):
         pass
 
+
 # Klasa odpowiedzialna za wyświetlanie zdjec
 class PictureMenu(Szkielet):
     def __init__(self, txt):
         keyRead = jsc.FatherJSON("toolsJSON", None)
         keyPath = keyRead.readJSON()
         self.txt = txt.upper()
-        print(f"{keyPath[str(self.txt)]['PATH']}/{self.txt}")
         self.photoFolder = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
-        self.photoFolder = self.photoFolder.replace('/', '\\')
+        self.iconPath = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}_icon"
+        #self.photoFolder = self.photoFolder.replace('/', '\\')
         self.lightSlider = keyPath[str(self.txt)]["ITERACJA"]
-        self.pictureIndex = 1
-        self.pictureLight = 1
-        self.max_number = 1
-        pole = (1530, 810)
-        textLength = [(22, 1), (36, 1)]
-        self.folderMethod()
+        self.photoSlider = keyPath[str(self.txt)]["ILOSCZDJEC"]
         self.defaultPhoto = f"{self.photoFolder}\\1_zdjecie_1.png"
-        self.resized_image = self.resize_image(self.defaultPhoto, (850, 620))
+        self.pictureIndex, self.pictureLight, self.max_number = 1, 1, 1
+        pole = (830, 810)
+        textLength = [(22, 1), (36, 1)]
+        self.changeJPGtoPNG()
+        self.resizeImage()
         super().__init__(pole, textLength)
+        self.num_columns = 30
+        #self.folderPath = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
 
-    def folderMethod(self):
+
+
+    def resizeImage(self):
+        input_folder = self.photoFolder
+        output_folder = os.path.join(os.path.dirname(input_folder), os.path.basename(input_folder) + "_icon")
+        # Sprawdź, czy folder "icon" istnieje i jeśli nie, to go utwórz
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        # Utwórz listę plików w folderze "icon"
+        existing_icon_files = os.listdir(output_folder)
+        # Przechodź przez pliki w folderze wejściowym
+        for filename in os.listdir(input_folder):
+            if filename.endswith(('.jpg', '.jpeg', '.png', '.gif')):
+                input_path = os.path.join(input_folder, filename)
+                output_path = os.path.join(output_folder, filename)
+                # Sprawdź, czy plik już istnieje w folderze "icon"
+                if filename not in existing_icon_files:
+                    # Otwórz obraz
+                    with Image.open(input_path) as img:
+                        new_width = 24
+                        new_height = 24
+                        resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
+                        # Zapisz zmniejszony obraz w folderze "icon"
+                        resized_img.save(output_path)
+
+    # Gdyby były przesłane jako JPG a nie PNG
+    def changeJPGtoPNG(self):
         # Konwersja jpg na png
         for filename in os.listdir(self.photoFolder):
             if filename.endswith(".jpg"):
@@ -449,7 +500,7 @@ class PictureMenu(Szkielet):
                     jpg_image.close()
                     os.remove(jpg_path)
                 except Exception as e:
-                    print(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
+                    sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
 
         # Liczenie plików PNG
         if os.path.exists(self.photoFolder) and os.path.isdir(self.photoFolder):
@@ -459,42 +510,52 @@ class PictureMenu(Szkielet):
                         number = int(filename[len("1_zdjecie_"):filename.find(".png")])
                         self.max_number = max(self.max_number, number)
                     except ValueError:
-                        print(f"Błąd podczas przetwarzania pliku {filename}: Nie można odczytać numeru.")
+                        sg.popup_error(f"Błąd podczas przetwarzania pliku {filename}: Nie można odczytać numeru.")
 
     def gui(self, *args):
-        i = 0
-        super().gui([sg.Text(f"Aktualnie wyświetlane narzędzie {self.txt}")],
-                    [sg.Image(self.resized_image, key="cutterGuardingGauge")],
-                     [sg.Slider(range=(1, self.max_number), default_value=1,
-                                           orientation='h',  key='-SP-', enable_events=True,size=(100,20))],
-                        [sg.Slider(range=(1, self.lightSlider), default_value=1,
-                                              orientation='h', key='-SL-', enable_events=True,size=(100,20))],
+        super().gui([
+            [sg.Text("Aktualnie wyświetlane narzędzie")],
+            [sg.Image((os.path.join(self.photoFolder, f"{1}_zdjecie_{1}.png")),
+                      key="cutterGuardingGauge", expand_x=True),],
+            [sg.Slider(range=(1, self.photoSlider), default_value=1, orientation='h', key='-SP-', enable_events=True,
+                          expand_x=True),],
+            [sg.Slider(range=(1, self.lightSlider), default_value=1, orientation='h', key='-SL-', enable_events=True,
+                       expand_x=True)],
+            [[sg.Button(pad=((3, 0), (10, 0)),
+                        image_filename=os.path.join(self.iconPath, f"1_zdjecie_{i}.png"),
+                        key=f"BT{i}", border_width=0, enable_events=True, metadata=i)
+                    for i in range(1, self.num_columns + 1)]]])
 
-                    )
-
-    def run(self, mapa, basicEvent = None):
+    def run(self, mapa, basicEvent=None):
 
         def pictureSlider(values):
             self.pictureIndex = int(values['-SP-'])
             self.updatePicture()
 
         def lightSlider(values):
+
             self.pictureLight = int(values['-SL-'])
+            self.updatePicture()
+            self.updateButtonPicture()
+
+        def testowe(x, w):
+            self._window_that_exited['-SP-'].update(x)
+            self.pictureIndex = int(x)
             self.updatePicture()
 
         map = {
             '-SP-': pictureSlider,
             '-SL-': lightSlider,
-
         }
 
+        for i in range(1, self.num_columns + 1):
+            map[f"BT{i}"] = partial(testowe, i)
 
         super().run(map)
 
-    # Metoda do zmniejszania png
-    def resize_image(self, image_path, size):
+    # Metoda do zmiany PNG na BIO
+    def changePNGtoBIO(self, image_path):
         original_image = Image.open(image_path)
-        original_image.thumbnail(size, Image.LANCZOS)
         bio = io.BytesIO()
         original_image.save(bio, format="PNG")
         return bio.getvalue()
@@ -502,11 +563,15 @@ class PictureMenu(Szkielet):
     # Update pokazywanych zdjęć
     def updatePicture(self):
         photoPath = os.path.join(self.photoFolder, f'{self.pictureLight}_zdjecie_{self.pictureIndex}.png')
-        photo_image = self.resize_image(photoPath, (850, 620))
+        photo_image = self.changePNGtoBIO(photoPath)
         self._window_that_exited["cutterGuardingGauge"].update(data=photo_image)
 
+    # Aktualizacja obrazów w przyciskach
     def updateButtonPicture(self):
-        pass
+        for i in range(1, self.num_columns + 1):
+            button_key = f"BT{i}"
+            button_image_path = os.path.join(self.iconPath, f"{self.pictureLight}_zdjecie_{i}.png")
+            self._window_that_exited[button_key].update(image_filename=button_image_path)
 
     def backEndIntegration(self, kolor):
         pass
