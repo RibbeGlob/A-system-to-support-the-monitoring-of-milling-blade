@@ -117,23 +117,33 @@ class Sending(Connection):
 
 
     def receive_image(self, here, ilosc, filename, kolor):
+        import shutil
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((self.ip, self.port))
             for i in range(ilosc):
                 remote_filename = filename+f'/{kolor}_zdjecie_{i+1}.png'
                 local_filename = f"{here}/{kolor}_zdjecie_{i+1}.png"
                 client_socket.sendall(f"GET_FILE:{remote_filename}".encode())
-                with open(local_filename, 'wb') as file:
-                    received_data = b''
-                    while True:
-                        data = client_socket.recv(1024)
-                        received_data += data
-                        end_mark = received_data.find(b'koniecpliku')
-                        if end_mark != -1:
-                            file.write(received_data[:end_mark])
-                            received_data = received_data[end_mark + len(b'koniecpliku'):]
-                            file.flush()
-                            break
+
+                received_data = b''
+                while True:
+                    data = client_socket.recv(1024)
+                    if data == b'puste':
+
+                        break
+                    else:
+                        with open(local_filename, 'wb') as file:
+                            received_data += data
+                            end_mark = received_data.find(b'koniecpliku')
+
+                            if end_mark != -1:
+                                print('jesteeeem')
+                                file.write(received_data[:end_mark])
+                                received_data = received_data[end_mark + len(b'koniecpliku'):]
+                                file.flush()
+                                break
+                print(f'xd{i}')
+
 
 
 # Wybranie koloru oraz automatyczny kontrast
