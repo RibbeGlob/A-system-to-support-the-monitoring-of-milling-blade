@@ -49,7 +49,7 @@ class ChangeJPGtoPNG:
                     jpg_image.close()
                     os.remove(jpg_path)
                 except Exception as e:
-                    print(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
+                    sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
 
 
 # Funkcja tworząca folder na komputerze
@@ -83,67 +83,56 @@ class Sending(Connection):
     def __init__(self, ip, port):
         super().__init__(ip, port)
 
-    def send_command(self, command):
+    def sendCommand(self, command):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 client_socket.connect((self.ip, self.port))
                 client_socket.sendall(f"CMD:{command}".encode())
                 while True:
                     data = client_socket.recv(1024)
-                    print(data)
                     if data == b"File received":
                         break
         except Exception as e:
             sg.popup_error(e)
 
-    def send_file(self, file_path):
+    def sendFile(self, file_path):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
                 client_socket.connect((self.ip, self.port))
                 file_name = os.path.basename(file_path)
                 client_socket.sendall(f"FILE:{file_name}".encode())
                 with open(file_path, 'rb') as file:
-                    print(f"Opening file: {file_path}")
                     client_socket.sendfile(file)
                 client_socket.sendall(b"ENDOLO")
                 while True:
                     data = client_socket.recv(1024)
-                    print(data)
                     if data == b"File received":
                         break
-
         except Exception as e:
             sg.popup_error(e)
 
 
-    def receive_image(self, here, ilosc, filename, kolor):
-        import shutil
+    def receiveImage(self, here, ilosc, filename, kolor):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((self.ip, self.port))
             for i in range(ilosc):
                 remote_filename = filename+f'/{kolor}_zdjecie_{i+1}.png'
                 local_filename = f"{here}/{kolor}_zdjecie_{i+1}.png"
                 client_socket.sendall(f"GET_FILE:{remote_filename}".encode())
-
                 received_data = b''
                 while True:
                     data = client_socket.recv(1024)
                     if data == b'puste':
-
                         break
                     else:
                         with open(local_filename, 'wb') as file:
                             received_data += data
                             end_mark = received_data.find(b'koniecpliku')
-
                             if end_mark != -1:
-                                print('jesteeeem')
                                 file.write(received_data[:end_mark])
                                 received_data = received_data[end_mark + len(b'koniecpliku'):]
                                 file.flush()
                                 break
-                print(f'xd{i}')
-
 
 
 # Wybranie koloru oraz automatyczny kontrast

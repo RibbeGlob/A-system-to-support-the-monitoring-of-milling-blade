@@ -1,12 +1,6 @@
 {
- "WES": {
+ "SDSVSD": {
   "USTAWIENIE": [
-   [
-    0,
-    0,
-    0,
-    0
-   ],
    [
     0,
     0,
@@ -19,97 +13,89 @@
     0,
     0,
     0
-   ],
+   ]
+  ],
+  "ITERACJA": 1,
+  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
+  "ILOSCZDJEC": 30
+ },
+ "DS": {
+  "USTAWIENIE": [
    [
     0,
+    0,
+    0,
+    0
+   ]
+  ],
+  "KOLOR": [
+   [
+    0,
+    0,
+    0
+   ]
+  ],
+  "ITERACJA": 1,
+  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
+  "ILOSCZDJEC": 30
+ },
+ "WQFD": {
+  "USTAWIENIE": [
+   [
+    0,
+    0,
+    0,
+    0
+   ]
+  ],
+  "KOLOR": [
+   [
+    0,
+    0,
+    0
+   ]
+  ],
+  "ITERACJA": 1,
+  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
+  "ILOSCZDJEC": 30
+ },
+ "TESTOWE": {
+  "USTAWIENIE": [
+   [
+    -8.0,
+    4.0,
+    -8.0,
+    4.0,
+    0.0,
+    255,
+    0,
+    0
+   ],
+   [
+    -8.0,
+    4.0,
+    -8.0,
+    4.0,
+    74.0,
+    255,
+    0,
+    0
+   ]
+  ],
+  "KOLOR": [
+   [
+    255,
+    0,
+    0
+   ],
+   [
+    255,
     0,
     0
    ]
   ],
   "ITERACJA": 2,
   "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
-  "ILOSCZDJEC": 3
- },
- "TEST": {
-  "USTAWIENIE": [
-   [
-    0,
-    0,
-    0,
-    0
-   ]
-  ],
-  "KOLOR": [
-   [
-    0,
-    0,
-    0
-   ]
-  ],
-  "ITERACJA": 1,
-  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
-  "ILOSCZDJEC": 2
- },
- "TESGH": {
-  "USTAWIENIE": [
-   [
-    0,
-    0,
-    0,
-    0
-   ],
-   [
-    0,
-    0,
-    0,
-    0
-   ],
-   [
-    0,
-    0,
-    0,
-    0
-   ]
-  ],
-  "KOLOR": [
-   [
-    0,
-    0,
-    0
-   ],
-   [
-    0,
-    0,
-    0
-   ],
-   [
-    0,
-    0,
-    0
-   ]
-  ],
-  "ITERACJA": 3,
-  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
   "ILOSCZDJEC": 30
- },
- "FASDDSDS": {
-  "USTAWIENIE": [
-   [
-    0,
-    0,
-    0,
-    0
-   ]
-  ],
-  "KOLOR": [
-   [
-    0,
-    0,
-    0
-   ]
-  ],
-  "ITERACJA": 1,
-  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x",
-  "ILOSCZDJEC": 3
  }
 }

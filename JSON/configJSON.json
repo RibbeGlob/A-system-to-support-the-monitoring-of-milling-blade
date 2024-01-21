@@ -2,6 +2,6 @@
  "WERSJA": "G1.0",
  "ZALOGOWANY": true,
  "IP": "raspberryfrez",
- "PORT": 12347,
+ "PORT": 12345,
  "PATH": "C:/Users/gerfr/OneDrive/Pulpit/x"
 }

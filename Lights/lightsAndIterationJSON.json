@@ -1,11 +1,12 @@
 {
-  "Lights": [
-    -3.0,
-    -4.0,
-    -7.0,
-    4.0
-  ],
-  "Folder": "/home/pi/FASDDSDS",
-  "LiczbaZdjec": 3,
-  "Iteracja": 1
+ "Lights": [
+  -8.0,
+  4.0,
+  -8.0,
+  4.0,
+  0.0,
+  255,
+  0,
+  0
+ ]
 }

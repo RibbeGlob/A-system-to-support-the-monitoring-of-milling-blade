@@ -130,9 +130,8 @@ class toolsConfirm(FatherJSON):
             checkingConfiguration = FatherJSON("configJSON", None)
             check = checkingConfiguration.readJSON()
             send = BE.Sending(check["IP"], check["PORT"])
-            Thread(target=send.send_command, args=(f"sudo rm -r /home/pi/{firstKey}",),
+            Thread(target=send.sendCommand, args=(f"sudo rm -r /home/pi/{firstKey}",),
                    daemon=True).start()
-            print(firstKey)
             self.check.pop(firstKey, None)      #usuniecie klucza
             self.data = self.check
             super().writeJSON()
