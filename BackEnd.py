@@ -1,35 +1,32 @@
 import os
-import paramiko
 import PySimpleGUI as sg
-import time
-import JSON.JSONscrypt as jsc
 from PIL import Image
 import socket
 
 
 def resizeImage():
     # Ścieżka do folderu "icon" z dopiskiem "_icon" w nazwie
-    input_folder = r"C:\Users\gerfr\OneDrive\Pulpit\x\pop"
-    output_folder = os.path.join(os.path.dirname(input_folder), os.path.basename(input_folder) + "_icon")
+    inputFolder = r"C:\Users\gerfr\OneDrive\Pulpit\x\pop"
+    outPutFolder = os.path.join(os.path.dirname(inputFolder), os.path.basename(inputFolder) + "_icon")
     # Sprawdź, czy folder "icon" istnieje i jeśli nie, to go utwórz
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    if not os.path.exists(outPutFolder):
+        os.makedirs(outPutFolder)
     # Utwórz listę plików w folderze "icon"
-    existing_icon_files = os.listdir(output_folder)
+    existingIconFiles = os.listdir(outPutFolder)
     # Przechodź przez pliki w folderze wejściowym
-    for filename in os.listdir(input_folder):
+    for filename in os.listdir(inputFolder):
         if filename.endswith(('.jpg', '.jpeg', '.png', '.gif')):
-            input_path = os.path.join(input_folder, filename)
-            output_path = os.path.join(output_folder, filename)
+            inputPath = os.path.join(inputFolder, filename)
+            outputPath = os.path.join(outPutFolder, filename)
             # Sprawdź, czy plik już istnieje w folderze "icon"
-            if filename not in existing_icon_files:
+            if filename not in existingIconFiles:
                 # Otwórz obraz
-                with Image.open(input_path) as img:
+                with Image.open(inputPath) as img:
                     width, height = img.size
-                    new_width = 24
-                    new_height = 24
-                    resized_img = img.resize((new_width, new_height), Image.ANTIALIAS)
-                    resized_img.save(output_path)
+                    newWidth = 24
+                    newHeight = 24
+                    resized_img = img.resize((newWidth, newHeight), Image.ANTIALIAS)
+                    resized_img.save(outputPath)
 
 
 
@@ -41,15 +38,15 @@ class ChangeJPGtoPNG:
         # Konwersja jpg na png
         for filename in os.listdir(self.path):
             if filename.endswith(".jpg"):
-                jpg_path = os.path.join(self.path, filename)
-                png_path = os.path.splitext(jpg_path)[0] + ".png"
+                jpgPath = os.path.join(self.path, filename)
+                pngPath = os.path.splitext(jpgPath)[0] + ".png"
                 try:
-                    jpg_image = Image.open(jpg_path)
-                    jpg_image.save(png_path, "PNG")
-                    jpg_image.close()
-                    os.remove(jpg_path)
+                    jpgImage = Image.open(jpgPath)
+                    jpgImage.save(pngPath, "PNG")
+                    jpgImage.close()
+                    os.remove(jpgPath)
                 except Exception as e:
-                    sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
+                    sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpgPath}: {e}")
 
 
 # Funkcja tworząca folder na komputerze
@@ -67,12 +64,12 @@ class Connection:
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
-        self.client_socket = None
+        self.clientSocket = None
 
     def connect(self):
         try:
-            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.client_socket.connect((self.ip, self.port))
+            self.clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.clientSocket.connect((self.ip, self.port))
             return True
         except Exception as e:
             sg.popup_error(f"Błąd połączenia {e}")
@@ -85,59 +82,82 @@ class Sending(Connection):
 
     def sendCommand(self, command):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                client_socket.connect((self.ip, self.port))
-                client_socket.sendall(f"CMD:{command}".encode())
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSocket:
+                clientSocket.connect((self.ip, self.port))
+                clientSocket.sendall(f"CMD:{command}".encode())
                 while True:
-                    data = client_socket.recv(1024)
+                    data = clientSocket.recv(1024)
                     if data == b"File received":
                         break
         except Exception as e:
             sg.popup_error(e)
 
-    def sendFile(self, file_path):
+    def sendFile(self, filePath):
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-                client_socket.connect((self.ip, self.port))
-                file_name = os.path.basename(file_path)
-                client_socket.sendall(f"FILE:{file_name}".encode())
-                with open(file_path, 'rb') as file:
-                    client_socket.sendfile(file)
-                client_socket.sendall(b"ENDOLO")
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSocket:
+                clientSocket.connect((self.ip, self.port))
+                file_name = os.path.basename(filePath)
+                clientSocket.sendall(f"FILE:{file_name}".encode())
+                with open(filePath, 'rb') as file:
+                    clientSocket.sendfile(file)
+                clientSocket.sendall(b"END")
                 while True:
-                    data = client_socket.recv(1024)
+                    data = clientSocket.recv(1024)
                     if data == b"File received":
                         break
         except Exception as e:
             sg.popup_error(e)
+
+
+    def previewImage(self,xd):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSocket:
+            clientSocket.connect((self.ip, self.port))
+            remoteFIlename = "/home/pi/preview/preview.jpg"
+            localFilename = r"C:\Users\gerfr\OneDrive\Pulpit\x\preview.jpg"
+            clientSocket.sendall(f"PREVIEW:".encode())
+            receivedData = b''
+            while True:
+                data = clientSocket.recv(1024)
+                if data == b'puste':
+                    break
+                else:
+                    with open(localFilename, 'wb') as file:
+                        receivedData += data
+                        end_mark = receivedData.find(b'koniecpliku')
+                        if end_mark != -1:
+                            file.write(receivedData[:end_mark])
+                            receivedData = receivedData[end_mark + len(b'koniecpliku'):]
+                            file.flush()
+                            break
+
 
 
     def receiveImage(self, here, ilosc, filename, kolor):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-            client_socket.connect((self.ip, self.port))
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as clientSocket:
+            clientSocket.connect((self.ip, self.port))
             for i in range(ilosc):
-                remote_filename = filename+f'/{kolor}_zdjecie_{i+1}.png'
-                local_filename = f"{here}/{kolor}_zdjecie_{i+1}.png"
-                client_socket.sendall(f"GET_FILE:{remote_filename}".encode())
-                received_data = b''
+                remoteFIlename = filename+f'/{kolor}_zdjecie_{i+1}.png'
+                localFilename = f"{here}/{kolor}_zdjecie_{i+1}.png"
+                clientSocket.sendall(f"GET_FILE:{remoteFIlename}".encode())
+                receivedData = b''
                 while True:
-                    data = client_socket.recv(1024)
+                    data = clientSocket.recv(1024)
                     if data == b'puste':
                         break
                     else:
-                        with open(local_filename, 'wb') as file:
-                            received_data += data
-                            end_mark = received_data.find(b'koniecpliku')
+                        with open(localFilename, 'wb') as file:
+                            receivedData += data
+                            end_mark = receivedData.find(b'koniecpliku')
                             if end_mark != -1:
-                                file.write(received_data[:end_mark])
-                                received_data = received_data[end_mark + len(b'koniecpliku'):]
+                                file.write(receivedData[:end_mark])
+                                receivedData = receivedData[end_mark + len(b'koniecpliku'):]
                                 file.flush()
                                 break
 
 
 # Wybranie koloru oraz automatyczny kontrast
 def changingNameToRGB(kolor):
-    kolory = {
+    colors = {
         "Czarny": [255, 0, 0],
         "Cyjan": [0, 255, 0],
         "Magenta": [0, 0, 255],
@@ -145,4 +165,4 @@ def changingNameToRGB(kolor):
         "Niebieski": [255, 255, 0],
         "Czerwony": [0, 255, 255]
     }
-    return kolory.get(kolor, [255, 255, 255])
+    return colors.get(kolor, [255, 255, 255])

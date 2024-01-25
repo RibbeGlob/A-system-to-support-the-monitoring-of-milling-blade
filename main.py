@@ -14,31 +14,24 @@ from functools import partial
 # Klasa odpowiedzialna za szkielet GUI
 class Szkielet(Sg.Window, ABC):
     def __init__(self, pole, *argv):
-        # Nazwa okna + rozmiar okna
         super().__init__(title="cutterGuardingGauge", size=pole, location=(0, 0))
-        # Lista, styli tekstowych (argv[0] zawsze przyjmuje jako argument)
         self.textStyle = []
         self.zamkniecie = False
         for iterator in argv[0]:
             self.textStyle.append({'size': iterator})
 
-    # Metoda odpowiedzialna za wyświetlanie graficzne programu (konieczna do działania klasy)
     @abstractmethod
     def gui(self, *args):
-        # przyjęcie interfejsu przez args
         self.interfejs = [arg for arg in args]
         self.layout([[self.interfejs]])
         self.run(None)
 
-    # Metoda obsługująca elementy GUI np. przyciski itp (konieczna do działania klasy)
     @abstractmethod
     def run(self, mapa, basicEvent = None):
-        # metoda zamykająca okno (basicEvent musi być zdefiniowany)
         def closeWindow(_):
             self.zamkniecie = True
             self.close()
 
-        # mapowanie eventów
         self.eventsMap = {
             Sg.WIN_CLOSED: closeWindow,
         }
@@ -46,17 +39,14 @@ class Szkielet(Sg.Window, ABC):
         self.eventsMap.update(mapa)
         while not self.zamkniecie:
             event, values = self.read()
-            # Wywołanie odpowiedniej funkcji obsługi dla danego zdarzenia
             runFunction = self.eventsMap.get(event, basicEvent)
             runFunction(values)
 
-    # Metoda przycisku
     @staticmethod
     def buttonEffect(buttonTrigger, buttonName, effect):
         if buttonTrigger == buttonName:
             return effect
 
-    # Metoda checkboxa
     @staticmethod
     def checkboxEffect(checkboxTrigger, checkboxStatus):
         if checkboxTrigger == checkboxStatus:
@@ -107,7 +97,7 @@ class PolaczenieRaspberry(Szkielet):
                     # zmienna do sprawdzenia gui
                     connection = Be.Connection(check["IP"], check["PORT"])
                     logCheck = connection.connect()   #polaczenie z rpi
-                    connection.client_socket.close()
+                    connection.clientSocket.close()
                     if logCheck == True:
                         run = MenuRaspberry(check["IP"], check["PORT"])
                         run.gui()
@@ -200,7 +190,7 @@ class MenuRaspberry(Szkielet):
         self.ip, self.port = ip, port
         self.lightsList = [0, 0, 0, 0]
         self.rgb = [0, 0, 0]
-        size = (350, 550)
+        size = (350, 600)
         textLength = [(22, 1), (36, 1)]
         readJSONFile = Jsc.ToolsJSON()
         self.toolList = readJSONFile.readJSON()
@@ -239,7 +229,8 @@ class MenuRaspberry(Szkielet):
                      Sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(8, 5), key="-COLORBUTTON-"),
                      Sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-", disabled=True)],
                     [Sg.Text(f"Zalogowano do: {self.ip}", key="-TXTLOGGED-"), Sg.Push(),
-                     Sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))])
+                     Sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))],
+                    [Sg.Button("pod", size=(7, 1), key="-P-", button_color=("white", "red"))])
 
     def run(self, mapa, basicEvent = None):
         # noinspection PyRedeclaration
@@ -364,28 +355,33 @@ class MenuRaspberry(Szkielet):
                 # noinspection PyUnresolvedReferences
                 Be.createFolder(rf"{self.folderPath}\{self.txt}")
 
-            # noinspection PyUnresolvedReferences
             path = photoIteration.returnPath()
             send = Be.Sending(check["IP"], check["PORT"])
 
-            def send_file_and_sleep(file_path, sleep_time=0.5):
+            def sendFileToRPI(file_path, sleep_time=0.5):
                 thread = Thread(target=send.sendFile, args=(file_path,), daemon=True)
                 thread.start()
                 thread.join()
                 time.sleep(sleep_time)
 
-            def send_command_and_sleep(command, sleep_time=0.5):
+            def sendCommandToRPI(command, sleep_time=0.5):
                 thread = Thread(target=send.sendCommand, args=(command,), daemon=True)
                 thread.start()
                 thread.join()
                 time.sleep(sleep_time)
 
-            send_file_and_sleep(f"{path}\\lightsAndIterationJSON.json")
-            send_command_and_sleep(f'mkdir /home/pi/{pictureName.upper()}')
-            send_file_and_sleep(f"{path}\\Camera.py")
-            send_command_and_sleep("sudo python3 /home/pi/received_files/Camera.py")
-            send_command_and_sleep(f"sudo rm -r /home/pi/sendedFile.json")
+            sendFileToRPI(f"{path}\\lightsAndIterationJSON.json")
+            sendCommandToRPI(f'mkdir /home/pi/{pictureName.upper()}')
+            sendFileToRPI(f"{path}\\Camera.py")
+            sendCommandToRPI("sudo python3 /home/pi/received_files/Camera.py")
+            sendCommandToRPI(f"sudo rm -r /home/pi/sendedFile.json")
             self["-ANGLECONFIRM-"].update(disabled=True)
+
+        def pod(values):
+            send = Be.Sending(check["IP"], check["PORT"])
+            thread = Thread(target=send.previewImage, args=('xd',), daemon=True)
+            thread.start()
+            thread.join()
 
 
         # przycisk potwierdzający wybór narzędzia
@@ -408,7 +404,6 @@ class MenuRaspberry(Szkielet):
                     self.enteredAngle = self.actually[self.txt.upper()]["ILOSCZDJEC"]
                 except KeyError:
                     pass
-
             else:
                 Sg.popup_error("Zdefiniuj narzędzie")
 
@@ -437,6 +432,7 @@ class MenuRaspberry(Szkielet):
             "-SHOWPICTURE-": showPicture,
             "-ANGLE-": angle,
             "-ANGLECONFIRM-": angleConfirm,
+            "-P-":pod,
         }
 
         super().run(mapa)
@@ -453,34 +449,31 @@ class PictureMenu(Szkielet):
         self.txt = txt.upper()
         self.photoFolder = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
         self.iconPath = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}_icon"
-        #self.photoFolder = self.photoFolder.replace('/', '\\')
         self.lightSlider = keyPath[str(self.txt)]["ITERACJA"]
         self.photoSlider = keyPath[str(self.txt)]["ILOSCZDJEC"]
         self.defaultPhoto = f"{self.photoFolder}\\1_zdjecie_1.png"
-        self.pictureIndex, self.pictureLight, self.max_number = 1, 1, 1
+        self.pictureIndex, self.pictureLight, self.maxNumber = 1, 1, 1
         pole = (830, 810)
         textLength = [(22, 1), (36, 1)]
         self.changeJPGtoPNG()
         self.resizeImage()
         super().__init__(pole, textLength)
         self.num_columns = 30
-        #self.folderPath = f"{keyPath[str(self.txt)]['PATH']}/{self.txt}"
-
 
 
     def resizeImage(self):
-        input_folder = self.photoFolder
-        output_folder = os.path.join(os.path.dirname(input_folder), os.path.basename(input_folder) + "_icon")
+        inputFolder = self.photoFolder
+        outputFolder = os.path.join(os.path.dirname(inputFolder), os.path.basename(inputFolder) + "_icon")
         # Sprawdź, czy folder "icon" istnieje i jeśli nie, to go utwórz
-        if not os.path.exists(output_folder):
-            os.makedirs(output_folder)
+        if not os.path.exists(outputFolder):
+            os.makedirs(outputFolder)
         # Utwórz listę plików w folderze "icon"
-        existing_icon_files = os.listdir(output_folder)
+        existing_icon_files = os.listdir(outputFolder)
         # Przechodź przez pliki w folderze wejściowym
-        for filename in os.listdir(input_folder):
+        for filename in os.listdir(inputFolder):
             if filename.endswith(('.jpg', '.jpeg', '.png', '.gif')):
-                input_path = os.path.join(input_folder, filename)
-                output_path = os.path.join(output_folder, filename)
+                input_path = os.path.join(inputFolder, filename)
+                output_path = os.path.join(outputFolder, filename)
                 # Sprawdź, czy plik już istnieje w folderze "icon"
                 if filename not in existing_icon_files:
                     # Otwórz obraz
@@ -496,15 +489,15 @@ class PictureMenu(Szkielet):
         # Konwersja jpg na png
         for filename in os.listdir(self.photoFolder):
             if filename.endswith(".jpg"):
-                jpg_path = os.path.join(self.photoFolder, filename)
-                png_path = os.path.splitext(jpg_path)[0] + ".png"
+                jpgPath = os.path.join(self.photoFolder, filename)
+                pngPath = os.path.splitext(jpgPath)[0] + ".png"
                 try:
-                    jpg_image = Image.open(jpg_path)
-                    jpg_image.save(png_path, "PNG")
+                    jpg_image = Image.open(jpgPath)
+                    jpg_image.save(pngPath, "PNG")
                     jpg_image.close()
-                    os.remove(jpg_path)
+                    os.remove(jpgPath)
                 except Exception as e:
-                    Sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpg_path}: {e}")
+                    Sg.popup_error(f"Błąd podczas konwersji i usuwania pliku {jpgPath}: {e}")
 
         # Liczenie plików PNG
         if os.path.exists(self.photoFolder) and os.path.isdir(self.photoFolder):
@@ -512,7 +505,7 @@ class PictureMenu(Szkielet):
                 if filename.endswith(".png"):
                     try:
                         number = int(filename[len("1_zdjecie_"):filename.find(".png")])
-                        self.max_number = max(self.max_number, number)
+                        self.maxNumber = max(self.maxNumber, number)
                     except ValueError:
                         Sg.popup_error(f"Błąd podczas przetwarzania pliku {filename}: Nie można odczytać numeru.")
 
@@ -537,7 +530,6 @@ class PictureMenu(Szkielet):
             self.updatePicture()
 
         def lightSlider(values):
-
             self.pictureLight = int(values['-SL-'])
             self.updatePicture()
             self.updateButtonPicture()
@@ -559,23 +551,23 @@ class PictureMenu(Szkielet):
 
     # Metoda do zmiany PNG na BIO
     def changePNGtoBIO(self, image_path):
-        original_image = Image.open(image_path)
+        originalImage = Image.open(image_path)
         bio = io.BytesIO()
-        original_image.save(bio, format="PNG")
+        originalImage.save(bio, format="PNG")
         return bio.getvalue()
 
     # Update pokazywanych zdjęć
     def updatePicture(self):
         photoPath = os.path.join(self.photoFolder, f'{self.pictureLight}_zdjecie_{self.pictureIndex}.png')
-        photo_image = self.changePNGtoBIO(photoPath)
-        self._window_that_exited["cutterGuardingGauge"].update(data=photo_image)
+        photoImage = self.changePNGtoBIO(photoPath)
+        self._window_that_exited["cutterGuardingGauge"].update(data=photoImage)
 
     # Aktualizacja obrazów w przyciskach
     def updateButtonPicture(self):
         for i in range(1, self.num_columns + 1):
-            button_key = f"BT{i}"
-            button_image_path = os.path.join(self.iconPath, f"{self.pictureLight}_zdjecie_{i}.png")
-            self._window_that_exited[button_key].update(image_filename=button_image_path)
+            buttonKey = f"BT{i}"
+            buttonImagePath = os.path.join(self.iconPath, f"{self.pictureLight}_zdjecie_{i}.png")
+            self._window_that_exited[buttonKey].update(image_filename=buttonImagePath)
 
     def backEndIntegration(self, kolor):
         pass
