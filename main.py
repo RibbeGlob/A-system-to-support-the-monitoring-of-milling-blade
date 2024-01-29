@@ -9,27 +9,27 @@ import io
 from threading import Thread
 import time
 from functools import partial
-
+import cv2
 
 # Klasa odpowiedzialna za szkielet GUI
-class Szkielet(Sg.Window, ABC):
-    def __init__(self, pole, *argv):
-        super().__init__(title="cutterGuardingGauge", size=pole, location=(0, 0))
+class Pattern(Sg.Window, ABC):
+    def __init__(self, field, *argv):
+        super().__init__(title="cutterGuardingGauge", size=field, location=(0, 0))
         self.textStyle = []
-        self.zamkniecie = False
+        self.closed = False
         for iterator in argv[0]:
             self.textStyle.append({'size': iterator})
 
     @abstractmethod
     def gui(self, *args):
-        self.interfejs = [arg for arg in args]
-        self.layout([[self.interfejs]])
+        self.interface = [arg for arg in args]
+        self.layout([[self.interface]])
         self.run(None)
 
     @abstractmethod
     def run(self, mapa, basicEvent = None):
         def closeWindow(_):
-            self.zamkniecie = True
+            self.closed = True
             self.close()
 
         self.eventsMap = {
@@ -37,7 +37,7 @@ class Szkielet(Sg.Window, ABC):
         }
 
         self.eventsMap.update(mapa)
-        while not self.zamkniecie:
+        while not self.closed:
             event, values = self.read()
             runFunction = self.eventsMap.get(event, basicEvent)
             runFunction(values)
@@ -54,11 +54,11 @@ class Szkielet(Sg.Window, ABC):
 
 
 # Klasa wyświetlająca graficzny pop up
-class GraphicPUP(Szkielet):
+class GraphicPUP(Pattern):
     def __init__(self, x, y):
-        pole = (x, y)
+        field = (x, y)
         textLength = [(17, 1)]
-        super().__init__(pole, textLength)
+        super().__init__(field, textLength)
 
     def gui(self, txt):
         super().gui([Sg.Column([[Sg.Text(txt, justification='center', )]])],
@@ -79,12 +79,14 @@ class GraphicPUP(Szkielet):
 
 
 # Klasa odpowiedzialna za interfejs łączenia się z RPI
-class PolaczenieRaspberry(Szkielet):
+class ConnectRaspberry(Pattern):
     def __init__(self):
-        pole = (350, 120)
+        field = (350, 80)
         textLength = [(17, 1)]
         self.response = None
-        super().__init__(pole, textLength)
+        self.ipList = Be.findIp()
+        print(self.ipList)
+        super().__init__(field, textLength)
 
     def checkConfiguration(self):
         try:
@@ -95,11 +97,11 @@ class PolaczenieRaspberry(Szkielet):
                 i = 0
                 while i < 3:
                     # zmienna do sprawdzenia gui
-                    connection = Be.Connection(check["IP"], check["PORT"])
+                    connection = Be.Connection(check["IP"], 12345)
                     logCheck = connection.connect()   #polaczenie z rpi
                     connection.clientSocket.close()
                     if logCheck == True:
-                        run = MenuRaspberry(check["IP"], check["PORT"])
+                        run = MenuRaspberry(check["IP"], 12345)
                         run.gui()
                         break
                     else:
@@ -116,9 +118,10 @@ class PolaczenieRaspberry(Szkielet):
             Sg.popup_error(KeyError)
             self.gui()
 
+
     def gui(self, *args):
-        super().gui([Sg.Text("Adres IP Raspberry Pi: ", **self.textStyle[0]), Sg.Input(key='-IP-', pad=(1, 1))],
-                    [Sg.Text("Port: ", **self.textStyle[0]), Sg.InputText(key='-PORT-', pad=(1, 1))],
+        super().gui([Sg.Text("Adres IP Raspberry Pi: ", **self.textStyle[0]),
+                     Sg.InputCombo(self.ipList, size=(32, 1),key="-IP-", readonly=True)],
                     [Sg.Text("Zapamiętaj mnie", **self.textStyle[0]), Sg.Checkbox("Tak", pad=(0, 1), key='-CX-'),
                      Sg.Button("Połącz", size=20, pad=((20, 0), (0, 0)), key='-BT-')])
 
@@ -129,68 +132,37 @@ class PolaczenieRaspberry(Szkielet):
         super().run(map)
 
     def connectButtonClicked(self, values):
-        login = values['-PORT-']
         ip = values['-IP-']
         if values['-CX-']:
-            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, True))
+            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, 12345, True))
+
         else:
-            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, login, False))
+            self.buttonEffect('-BT-', 'Połącz', self.backEndIntegration(ip, 12345, False))
+
 
     def backEndIntegration(self, ip, port, check):
-        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "PORT": port.int()}
+        dataJSON = {"WERSJA": "G1.0", "ZALOGOWANY": check, "IP": ip, "PORT": 12345}
         checkingJS = Jsc.FatherJSON("configJSON", dataJSON)
         checkingJS.writeJSON()
+        connection = Be.Connection(ip, 12345)
+        logCheck = connection.connect()  # polaczenie z rpi
+        connection.clientSocket.close()
         self.close()
+
         myMenu = MenuRaspberry(ip, port)
         myMenu.gui(None)
 
 
-# Klasa odpowiedzialna za menu wyboru kolorów
-class ColorMenu(Szkielet):
-    def __init__(self):
-        pole = (150, 150)
-        textLength = [(22, 1), (36, 1)]
-        self.selectedColor = None
-        self.colors = ['Czarny', 'Cyjan', 'Magenta', 'Żółty', 'Niebieski', 'Czerwony']
-        super().__init__(pole, textLength)
-
-    def gui(self, *args):
-        super().gui([Sg.Text('Wybierz kolor frezu')],
-                    [Sg.Listbox(values=self.colors, size=(100, 4),
-                                select_mode=Sg.LISTBOX_SELECT_MODE_SINGLE, key='-COLORLIST-')],
-                    [Sg.Button('Potwierdź', size=14, key='-BC-')])
-        return self.selectedColor
-
-    def run(self, mapa, basicEvent = None):
-        map = {
-            '-BC-': self.colorButton,
-        }
-        super().run(map)
-
-    def colorButton(self, values):
-        self.selectedColor = values['-COLORLIST-'][0] if values['-COLORLIST-'] else None
-        self.buttonEffect('-BC-', 'Połącz', self.backEndIntegration())
-
-    def backEndIntegration(self):
-        if self.selectedColor is not None:
-            self.menu = GraphicPUP(200, 80)
-            self.menu.gui(f"Wybrany kolor: {self.selectedColor}")
-            self.zamkniecie = True
-            self.close()
-        else:
-            pass
-
-
 # Klasa odpowiedzialna za główne menu RPI
-class MenuRaspberry(Szkielet):
+class MenuRaspberry(Pattern):
     def __init__(self, ip, port):
         self.iteracja = 1
         self.angle = 0
-        self.colorCutter = ""
+        self.colorList = ["Czarny", "Cyjan", "Magenta", "Żółty", "Niebieski", "Czerwony"]
         self.ip, self.port = ip, port
         self.lightsList = [0, 0, 0, 0]
         self.rgb = [0, 0, 0]
-        size = (350, 600)
+        size = (350, 610)
         textLength = [(22, 1), (36, 1)]
         readJSONFile = Jsc.ToolsJSON()
         self.toolList = readJSONFile.readJSON()
@@ -221,16 +193,18 @@ class MenuRaspberry(Szkielet):
                           Sg.Slider(range=(-4, 4), size=(4, 16), orientation="v", default_value=0, key='-YP-')]
                      ])
                      ],
+                    [Sg.Frame('Kolor narzędzia', [[Sg.InputCombo(self.colorList,
+                                                                 size=(30, 1), key="-COLOR-", readonly=True),
+                     Sg.Button("Potwierdź", size=(8, 1), key="-CONFIRMCOLOR-", disabled=False)]], expand_x=True)],
                     [Sg.Frame('Poziom jasności', [
                         [Sg.Slider(range=(0, 255), default_value=0, orientation='h', key='-HL-', expand_x=True),
                          ]], expand_x=True)],
-                    [Sg.Button("Wykonaj zdjęcie", size=(8, 5), key="-PICTURE-", disabled=True),
+                    [Sg.Button("Wykonaj zdjęcia", size=(8, 5), key="-PICTURE-", disabled=True),
+                     Sg.Button(f"Podgląd frezu", size=(8, 5), key="-PREVIEW-"),
                      Sg.Button("Ustaw światło", size=(8, 5), key="-LIGHTBUTTON-"),
-                     Sg.Button(f"Wybierz kolor frezu {self.colorCutter}", size=(8, 5), key="-COLORBUTTON-"),
-                     Sg.Button("Podgląd zdjęcia", size=(8, 5), key="-SHOWPICTURE-", disabled=True)],
+                     Sg.Button("Wyświetl zdjęcia", size=(8, 5), key="-SHOWPICTURE-", disabled=True)],
                     [Sg.Text(f"Zalogowano do: {self.ip}", key="-TXTLOGGED-"), Sg.Push(),
-                     Sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))],
-                    [Sg.Button("pod", size=(7, 1), key="-P-", button_color=("white", "red"))])
+                     Sg.Button("Wyloguj", size=(7, 1), key="-LOGOUT-", button_color=("white", "red"))])
 
     def run(self, mapa, basicEvent = None):
         # noinspection PyRedeclaration
@@ -269,7 +243,7 @@ class MenuRaspberry(Szkielet):
             files = ["lightsAndIterationJSON.json", "lights.py", "lights2.py"]
 
             for file in files:
-                thread = Thread(target=send.sendFile, args=(f"{path}\\{file}",), daemon=True)
+                thread = Thread(target=send.sendData, args=(f"{path}\\{file}", 1), daemon=True)
                 thread.start()
                 thread.join()
                 time.sleep(0.5)
@@ -278,7 +252,7 @@ class MenuRaspberry(Szkielet):
                         "sudo python3 /home/pi/received_files/lights2.py"]
 
             for cmd in commands:
-                Thread(target=send.sendCommand, args=(cmd,), daemon=True).start()
+                Thread(target=send.sendData, args=(cmd, 2), daemon=True).start()
                 time.sleep(0.5)
 
 
@@ -299,12 +273,15 @@ class MenuRaspberry(Szkielet):
             photoMenu = PictureMenu(self.txt)
             photoMenu.gui()
 
-        # Przycisk odpowiadajacy za menu wyboru koloru frezu
-        def colorMenu(_):
-            # changing name zmienia nazwę na kontrastowe RGB
-            myColor = ColorMenu()
-            color = myColor.gui()
+        # Przycisk odpowiadający za kontrast koloru
+        def color(values):
+            print(values["-COLOR-"])
             self.rgb = Be.changingNameToRGB(color)
+            print(self.rgb)
+
+        # Przycisk odpowiadajacy za podgląd
+        def previewMenu(_):
+            Be.stream(check["IP"])
 
         # Puste aby działała aktualizacja kąta
         def angle(_):
@@ -359,13 +336,13 @@ class MenuRaspberry(Szkielet):
             send = Be.Sending(check["IP"], check["PORT"])
 
             def sendFileToRPI(file_path, sleep_time=0.5):
-                thread = Thread(target=send.sendFile, args=(file_path,), daemon=True)
+                thread = Thread(target=send.sendData, args=(file_path, 1,), daemon=True)
                 thread.start()
                 thread.join()
                 time.sleep(sleep_time)
 
             def sendCommandToRPI(command, sleep_time=0.5):
-                thread = Thread(target=send.sendCommand, args=(command,), daemon=True)
+                thread = Thread(target=send.sendData, args=(command, 2,), daemon=True)
                 thread.start()
                 thread.join()
                 time.sleep(sleep_time)
@@ -376,12 +353,6 @@ class MenuRaspberry(Szkielet):
             sendCommandToRPI("sudo python3 /home/pi/received_files/Camera.py")
             sendCommandToRPI(f"sudo rm -r /home/pi/sendedFile.json")
             self["-ANGLECONFIRM-"].update(disabled=True)
-
-        def pod(values):
-            send = Be.Sending(check["IP"], check["PORT"])
-            thread = Thread(target=send.previewImage, args=('xd',), daemon=True)
-            thread.start()
-            thread.join()
 
 
         # przycisk potwierdzający wybór narzędzia
@@ -415,7 +386,7 @@ class MenuRaspberry(Szkielet):
             self.close()            #zamyka okno
             self.menu = GraphicPUP(150, 80)     #Graficzny PopUp
             self.menu.gui("Wylogowano")
-            myGui = PolaczenieRaspberry()       #Odpalenie od poczatku
+            myGui = ConnectRaspberry()       #Odpalenie od poczatku
             myGui.checkConfiguration()
 
 
@@ -425,14 +396,14 @@ class MenuRaspberry(Szkielet):
             "-NO-": radioNoButton,
             "-FOLDER-": searchFolder,
             "-LIGHTBUTTON-": lights,
-            "-COLORBUTTON-": colorMenu,
+            "-PREVIEW-": previewMenu,
             "-PICTURE-": picture,
             "-CONFIRM-": confirm,
             "-LOGOUT-": logout,
             "-SHOWPICTURE-": showPicture,
             "-ANGLE-": angle,
             "-ANGLECONFIRM-": angleConfirm,
-            "-P-":pod,
+            "-CONFIRMCOLOR-": color,
         }
 
         super().run(mapa)
@@ -442,7 +413,7 @@ class MenuRaspberry(Szkielet):
 
 
 # Klasa odpowiedzialna za wyświetlanie zdjec
-class PictureMenu(Szkielet):
+class PictureMenu(Pattern):
     def __init__(self, txt):
         keyRead = Jsc.FatherJSON("toolsJSON", None)
         keyPath = keyRead.readJSON()
@@ -573,7 +544,7 @@ class PictureMenu(Szkielet):
         pass
 
 def main():
-    myGui = PolaczenieRaspberry()
+    myGui = ConnectRaspberry()
     myGui.checkConfiguration()
 
 if __name__ == "__main__":
