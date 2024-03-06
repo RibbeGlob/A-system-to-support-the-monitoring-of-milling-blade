@@ -9,7 +9,7 @@ import io
 from threading import Thread
 import time
 from functools import partial
-import cv2
+
 
 # Klasa odpowiedzialna za szkielet GUI
 class Pattern(Sg.Window, ABC):
@@ -22,12 +22,12 @@ class Pattern(Sg.Window, ABC):
 
     @abstractmethod
     def gui(self, *args):
-        self.interface = [arg for arg in args]
-        self.layout([[self.interface]])
+        interface = [arg for arg in args]
+        self.layout([[interface]])
         self.run(None)
 
     @abstractmethod
-    def run(self, mapa, basicEvent = None):
+    def run(self, mapa, basicEvent=None):
         def closeWindow(_):
             self.closed = True
             self.close()
@@ -85,7 +85,6 @@ class ConnectRaspberry(Pattern):
         textLength = [(17, 1)]
         self.response = None
         self.ipList = Be.findIp()
-        print(self.ipList)
         super().__init__(field, textLength)
 
     def checkConfiguration(self):
@@ -95,6 +94,7 @@ class ConnectRaspberry(Pattern):
             check = checkingConfiguration.readJSON()        #pobranie danych z jsona config
             if check["ZALOGOWANY"] == True:
                 i = 0
+                # 3 razy próbuje połączenia
                 while i < 3:
                     # zmienna do sprawdzenia gui
                     connection = Be.Connection(check["IP"], 12345)
@@ -106,6 +106,8 @@ class ConnectRaspberry(Pattern):
                         break
                     else:
                         i += 1
+                else:
+                    self.gui()
             else:
                 self.gui()
         except FileNotFoundError:
@@ -275,13 +277,20 @@ class MenuRaspberry(Pattern):
 
         # Przycisk odpowiadający za kontrast koloru
         def color(values):
-            print(values["-COLOR-"])
             self.rgb = Be.changingNameToRGB(color)
-            print(self.rgb)
 
         # Przycisk odpowiadajacy za podgląd
         def previewMenu(_):
-            Be.stream(check["IP"])
+            import threading
+            thread = threading.Thread(target=runStream)
+            thread.start()
+
+        # Metoda odpowiedzialna za start transmisji
+        def runStream():
+            import subprocess
+            folder = os.getcwd()
+            path = os.path.join(folder, "stream.py")
+            subprocess.run(["python", path])
 
         # Puste aby działała aktualizacja kąta
         def angle(_):

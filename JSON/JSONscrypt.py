@@ -4,7 +4,6 @@ import PySimpleGUI as sg
 
 
 class FatherJSON:
-
     def __init__(self, jsonFile, data):
         self.jsonFile = jsonFile
         self.data = data
@@ -22,7 +21,9 @@ class FatherJSON:
             sg.popup_error("Error plik JSON jest uszkodzony")
         except Exception as e:
             sg.popup_error(f"Wystąpił nieoczekiwany błąd: {str(e)}")
-
+        finally:
+            if 'fileJSON' in locals() and not fileJSON.closed:
+                fileJSON.close()
     # Czytanie pliku JSON
     def readJSON(self):
         try:
@@ -130,14 +131,14 @@ class toolsConfirm(FatherJSON):
             checkingConfiguration = FatherJSON("configJSON", None)
             check = checkingConfiguration.readJSON()
             send = BE.Sending(check["IP"], check["PORT"])
-            Thread(target=send.sendCommand, args=(f"sudo rm -r /home/pi/{firstKey}",),
+            Thread(target=send.sendData, args=(f"sudo rm -r /home/pi/{firstKey}", 2),
                    daemon=True).start()
             self.check.pop(firstKey, None)      #usuniecie klucza
             self.data = self.check
             super().writeJSON()
             return self.data
         except StopIteration:
-            print("Pusty")
+            pass
 
     def writeJSON(self):
         empty = {
